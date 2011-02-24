@@ -2,6 +2,7 @@
 LibCanvas.extract();
 
 atom(function () {
+	
 	var jet = new Jet({
 		element : '#jet',
 		server  : 6660

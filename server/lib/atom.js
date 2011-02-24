@@ -507,14 +507,14 @@ atom.extend(Class, {
 					throw new TypeError('Function is empty');
 				} else {
 					Object.ifEmpty(this.events, name, []);
-
+					
 					this.events[name].include(fn);
 
 					var ready = this.events.$ready[name];
 					if (ready) fire.apply(this, [name, fn, ready, onfinish]);
-					onfinish.invoke();
+						onfinish.invoke();
+					}
 				}
-			}
 			return this;
 		},
 		removeEvent: function (name, fn) {
@@ -554,9 +554,11 @@ atom.extend(Class, {
 			return this;
 		},
 		readyEvent: function (name, args) {
-			name = removeOn(name);
-			this.events.$ready[name] = args || [];
-			nextTick(this.fireEvent.context(this, [name, args || []]));
+			nextTick(function () {
+				name = removeOn(name);
+				this.events.$ready[name] = args || [];
+				this.fireEvent(name, args || []);
+			}.context(this));
 			return this;
 		}
 	})

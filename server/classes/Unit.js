@@ -50,7 +50,7 @@ GLOBAL.Unit = atom.Class({
 		return false;
 	},
 	updateTime: function() {
-		var now  = Date.now();
+		var now  =  Date.now();
 		var time = (Date.now() - this.lastUpdate).toSeconds();
 		this.lastUpdate = now;
 		// Избегаем читерства с долгим отсуствием запросов

@@ -6,6 +6,13 @@ GLOBAL.Field = atom.Class({
 	initialize: function (width, height) {
 		this.width  = width;
 		this.height = height;
+		
+		(function () {
+			this.links.invoke('send', {
+				units: this.units,
+				shots: this.shots
+			});
+		}.periodical(30, this));
 	},
 
 	_shots : [],
@@ -54,7 +61,7 @@ GLOBAL.Field = atom.Class({
 	},
 
 	deleteUnit: function (unit) {
-		delete this._units[unit.id];
+		delete this.units[unit.id];
 		return this;
 	},
 
@@ -63,5 +70,32 @@ GLOBAL.Field = atom.Class({
 			Number.random(0, this.width),
 			Number.random(0, this.height)
 		);
+	},
+	
+	links: [],
+	createLink: function (client) {
+		var field = this,
+		    unit  = field.createUnit(client.sessionId),
+		    link  = new Link(this, client)
+				.addEvent('connect', function () {
+					link.announcement('connected');
+
+					client.send({
+						screen: field.object,
+						player: unit.object,
+						units : field.units,
+					});
+				})
+				.addEvent('message', function (message) {
+					if (message.unit && !unit.dead) {
+						unit.update(message.unit);
+					}
+				})
+				.addEvent('disconnect', function () {
+					field.deleteUnit(unit);
+					client.broadcast({ disconnected: link.id });
+					link.announcement('disconnected');
+				});
+		this.links.push(link);
 	}
 });
