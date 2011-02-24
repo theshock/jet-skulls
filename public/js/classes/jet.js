@@ -24,6 +24,14 @@ var Jet = atom.Class({
 		}
 		return this;
 	},
+	deleteUnit: function (unit) {
+		if (this.units[unit.id]) {
+			unit = this.units[unit.id];
+			delete this.units[unit.id];
+			this.libcanvas.rmElement(unit);
+		}
+		return this;
+	},
 
 	message: function (data) {
 		for (var i in data) {
@@ -50,7 +58,10 @@ var Jet = atom.Class({
 			this.updateUnit(unit);
 		},
 		announcement: function (msg) {
-			atom.log('Announcement: ', msg);
+			atom.log('Announcement: «' + msg + '»');
+		},
+		disconnect: function (unit) {
+			this.deleteUnit(unit);
 		}
 	}
 });

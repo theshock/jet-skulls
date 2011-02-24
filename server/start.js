@@ -17,8 +17,7 @@ new function () {
 
 		var unit = field.createUnit(client.sessionId);
 
-		var p = unit.position;
-		console.log(client.sessionId + ' connected: [' + p.x + ':' + p.y + ']');
+		console.log(client.sessionId + ' connected');
 
 		client.send({
 			screen: field.object,
