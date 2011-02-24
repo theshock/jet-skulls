@@ -3,7 +3,7 @@ var Link = atom.Class({
 
 	socket: null,
 	initialize: function (port) {
-		this.socket = new io.Socket(document.location, { port : port });
+		this.socket = new io.Socket(location.host, { port : port });
 		this.socket.on('connect', this._onConnect.context(this));
 		this.socket.on('message', this._onMessage.context(this));
 	},

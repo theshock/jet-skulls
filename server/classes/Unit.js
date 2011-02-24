@@ -1,10 +1,20 @@
 
 
 GLOBAL.Unit = atom.Class({
-	initialize: function (id) {
-		this.id = id;
+	speed: 100,
+	lastUpdate: 0,
+	initialize: function (id, field) {
+		this.id         = id;
+		this.lastUpdate = Date.now();
+		this.position   = new Point(field.randomPoint());
 	},
-	getStatus: function () {
-		
+	update: function (status) {
+
+	},
+	get object () {
+		return {
+			id: this.id,
+			position : this.position.toObject()
+		}
 	}
 });
