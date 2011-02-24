@@ -1,8 +1,10 @@
 var Unit = atom.Class({
 	Implements: [Drawable],
 
+	isPlayer: false,
 	position: new Point(0,0),
 	initialize: function (data) {
+		this.isPlayer = !!data.isPlayer;
 		this.update(data);
 	},
 	update: function (data) {
@@ -13,13 +15,18 @@ var Unit = atom.Class({
 	},
 	viewPoint: function () {
 		return this.position.clone()
-			.move({ x: 15, y: 0 })
-			.rotate(this.angle, this.position);
+			.move({ x: 20, y: 0 })
+			.rotate(this.angle, this.position)
+			.snapToPixel();
 	},
 	draw: function () {
-		console.log(this.position.toObject(), this.viewPoint().toObject());
-		this.libcanvas.ctx
-			.stroke(new Circle(this.position, 10), 'red')
-			.stroke(new Line  (this.position, this.viewPoint()), 'red')
+		var lc = this.libcanvas;
+		if (this.isPlayer && lc.mouse.inCanvas) {
+			lc.ctx.stroke(new Circle(lc.mouse.point.snapToPixel(), 4), '#ff0')
+		}
+		var color = this.isPlayer ? 'green' : 'red';
+		lc.ctx
+			.stroke(new Circle(this.position.snapToPixel(), 10), color)
+			.stroke(new Line  (this.position.snapToPixel(), this.viewPoint()), color)
 	}
 });

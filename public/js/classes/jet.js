@@ -11,7 +11,7 @@ var Jet = atom.Class({
 
 	units: {},
 	createUnit: function (unit) {
-		unit = new Unit(unit);
+		unit = new Unit(unit, this);
 		this.libcanvas.addElement(unit).update();
 		this.units[unit.id] = unit;
 		return unit;
@@ -47,6 +47,7 @@ var Jet = atom.Class({
 			this.libcanvas.set(screen);
 		},
 		player: function (player) {
+			player.isPlayer = true;
 			this.createUnit(player);
 		},
 		units: function (units) {

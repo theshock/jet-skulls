@@ -7,7 +7,7 @@ atom(function () {
 		server  : 6660
 	});
 
-	new Controls(jet, {
+	jet.controls = new Controls(jet, {
 		up   : 'w',
 		down : 's',
 		left : 'a',

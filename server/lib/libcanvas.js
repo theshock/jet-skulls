@@ -375,6 +375,10 @@ var Point = LibCanvas.Point = atom.Class({
 		return accuracy == null ? (to.x == this.x && to.y == this.y) :
 			(this.x.equals(to.x, accuracy) && this.y.equals(to.y, accuracy));
 	},
+	snapToPixel: function (minus) {
+		var shift = minus ? -0.5 : 0.5;
+		return this.clone().move({ x: shift, y: shift });
+	},
 	toObject: function () {
 		return {
 			x: this.x,

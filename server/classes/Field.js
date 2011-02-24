@@ -8,6 +8,19 @@ GLOBAL.Field = atom.Class({
 		this.height = height;
 	},
 
+	_shots : {},
+	get shots () {
+		return Object.values(this._shots);
+	},
+
+	shoot: (coord) {
+		var point = Point.from(coord);
+		for (var i in this._units) {
+			this._units.checkInjured(point);
+		}
+		this.shots
+	},
+
 	get units () {
 		var array = [];
 		for (var i in this._units) {

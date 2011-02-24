@@ -29,10 +29,15 @@ new function () {
 		client.on('message', function (message) {
 			if (message.unit) {
 				unit.update(message.unit);
-				client.broadcast({ unit: unit.object });
-				client.send     ({ unit: unit.object });
 			}
 		});
+
+		(function () {
+			client.send({
+				units: field.units,
+				shots: field.shots
+			});
+		}.periodical(30));
 
 		client.on('disconnect', function(){
 			field.deleteUnit(unit);
