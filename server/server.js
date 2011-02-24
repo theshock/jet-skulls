@@ -6,7 +6,7 @@ var port = 6660,
     url = require('url'),
     io = require('./lib/socket.io'),
     sys = require('sys'),
-    atom = require('./atom'),
+    atom = require('./atom-server'),
     libcanvas = require('./libcanvas'),
 
 units = { },
