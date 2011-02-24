@@ -1011,9 +1011,12 @@ provides: String
 new function () {
 
 var substituteRE = /\\?\{([^{}]+)\}/g,
-	safeHtmlRE = /[<'&">]/g;
+	safeHtmlRE = /[<'&">]/g,
+	UID = Date.now();
 	
-
+String.uniqueID = function () {
+	return (UID++).toString(36);
+};
 
 atom.implement(String, 'safe', {
 	safeHtml: function () {

@@ -21,9 +21,7 @@ provides: atom
 */
 
 (function () {
-	var win = window,
-	    doc = win.document,
-	    prototype = 'prototype',
+	var prototype = 'prototype',
 	    apply = 'apply',
 		toString = Object[prototype].toString;
 
@@ -32,7 +30,7 @@ provides: atom
 		return atom.initialize[apply](this, arguments);
 	};
 
-	var atom = window.atom = function () {
+	var atom = (this.window || GLOBAL).atom = function () {
 		return new atomFactory(arguments);
 	};
 
@@ -56,7 +54,7 @@ provides: atom
 		var ext = proto ? elem[prototype] : elem;
 		for (var i in from) {
 			if (safe && i in ext) continue;
-			
+
 			if ( !implementAccessors(from, ext, i) ) {
 				ext[i] = i == 'prototype' ? from[i] : clone(from[i]);
 			}
@@ -139,7 +137,7 @@ provides: atom
 	};
 	var merge = function(source, k, v){
 		if (typeOf(k) == 'string') return mergeOne(source, k, v);
-		
+
 		for (var i = 1, l = arguments.length; i < l; i++){
 			var object = arguments[i];
 			if (object) {
@@ -150,7 +148,7 @@ provides: atom
 		}
 		return source;
 	};
-	
+
 	var extend = atom.extend = function (elem, safe, from) {
 		return innerExtend(arguments, atom, false);
 	};
@@ -164,10 +162,9 @@ provides: atom
 			return Array[prototype].slice.call(elem);
 		},
 		log: function () {
-			var console = win.console;
-			if (console && console.log) {
+			try {
 				return console.log[apply](console, arguments);
-			} else return false;
+			} catch (e) { return false; }
 		},
 		isAtom: function (elem) {
 			return elem && elem instanceof Atom;
@@ -237,11 +234,11 @@ requires:
 inspiration:
   - "[JQuery](http://jquery.org)"
 
-provides: atom.dom
+provides: dom
 
 ...
 */
-(function () {
+new function () {
 	var win = window,
 	    doc = win.document,
 		tagNameRE = /^[-_a-z0-9]+$/i,
@@ -408,7 +405,7 @@ provides: atom.dom
 			});
 		}
 	});
-})();
+};
 
 /*
 ---
@@ -422,7 +419,7 @@ license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgp
 requires:
 	- atom
 
-provides: atom.ajax
+provides: ajax
 
 ...
 */
@@ -485,10 +482,10 @@ license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgp
 
 requires:
 	- atom
-	- atom.dom
-	- atom.ajax
+	- dom
+	- ajax
 
-provides: atom.ajax.dom
+provides: ajax.dom
 
 ...
 */
@@ -505,7 +502,7 @@ atom.implement({
 
 		atom.ajax(atom.extend(config, {
 			onError: config.onError.bind(this),
-			onLoad : config.onLoad .bind(this)			
+			onLoad : config.onLoad .bind(this)
 		}));
 		return this;
 	}
@@ -522,21 +519,20 @@ description: "Contains the Class Function for easily creating, extending, and im
 license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
 
 requires:
-	- atom]
+	- atom
 
 inspiration:
   - "[MooTools](http://mootools.net)"
 
-provides: [atom.Class]
+provides: Class
 
 ...
 */
 
 
-(function(){
+(function(atom){
 
-var atom = window.atom,
-	typeOf = atom.typeOf,
+var typeOf = atom.typeOf,
 	extend = atom.extend,
 	accessors = atom.implementAccessors,
 	prototype = 'prototype';
@@ -605,7 +601,7 @@ var reset = function(object){
 var wrap = function(self, key, method){
 	// if method is already wrapped
 	if (method.$origin) method = method.$origin;
-	
+
 	var wrapper = extend(function(){
 		if (method.$protected && !this.$caller) throw new Error('The method «' + key + '» is protected.');
 		var current = this.$caller;
@@ -614,7 +610,7 @@ var wrap = function(self, key, method){
 		this.$caller = current;
 		return result;
 	}, {$owner: self, $origin: method, $name: key});
-	
+
 	return wrapper;
 };
 
@@ -722,7 +718,7 @@ extend(Class, {
 
 extend({ Class: Class });
 
-})();
+})(atom);
 
 /*
 ---
@@ -735,12 +731,12 @@ license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgp
 
 requires:
 	- atom
-	- atom.Class
+	- Class
 
 inspiration:
   - "[MooTools](http://mootools.net)"
 
-provides: atom.Class.Events
+provides: Class.Events
 
 ...
 */
@@ -855,7 +851,7 @@ atom.extend(Class, {
 	})
 });
 
-}();
+};
 
 /*
 ---
@@ -868,12 +864,12 @@ license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgp
 
 requires:
 	- atom
-	- atom.Class
+	- Class
 
 inspiration:
   - "[MooTools](http://mootools.net)"
 
-provides: atom.Class.Options
+provides: Class.Options
 
 ...
 */
@@ -908,7 +904,7 @@ author: "Steven Levithan <stevenlevithan.com>"
 requires:
 	- atom
 
-provides: atom.uri
+provides: uri
 
 ...
 */
@@ -1174,7 +1170,7 @@ new function () {
 		delay:      timeout.run.context(Function.context, ['Timeout']),
 		periodical: timeout.run.context(Function.context, ['Interval'])
 	});
-}(); 
+}();
 
 
 /*
@@ -1241,7 +1237,7 @@ atom.implement(Number, 'safe', {
 ['abs','acos','asin','atan','atan2','ceil','cos','exp','floor','log','max','min','pow','sin','sqrt','tan']
 	.forEach(function(method) {
 		if (Number[method]) return;
-		
+
 		Number.prototype[method] = function() {
 			return Math[method].apply(null, [this].append(arguments));
 		};
@@ -1353,8 +1349,12 @@ provides: String
 new function () {
 
 var substituteRE = /\\?\{([^{}]+)\}/g,
-	safeHtmlRE = /[<'&">]/g;
-	
+	safeHtmlRE = /[<'&">]/g,
+	UID = Date.now();
+
+String.uniqueID = function () {
+	return (UID++).toString(36);
+};
 
 
 atom.implement(String, 'safe', {
@@ -1399,4 +1399,4 @@ atom.implement(String, 'safe', {
 
 }();
 
- 
+

@@ -9,6 +9,7 @@ var Jet = atom.Class({
 
 	start: function () {},
 
+	shots: {},
 	units: {},
 	createUnit: function (unit) {
 		unit = new Unit(unit, this);
@@ -63,6 +64,14 @@ var Jet = atom.Class({
 		},
 		disconnect: function (unit) {
 			this.deleteUnit(unit);
+		},
+		shots: function (shots) {
+			for (var i = shots.length; i--;) {
+				if (!this.shots[shots[i].id]) {
+					this.shots[shots[i].id] = true;
+					this.libcanvas.addElement(new Shot(shots[i]));
+				}
+			}
 		}
 	}
 });

@@ -27,7 +27,7 @@ new function () {
 		client.broadcast({ unit  : unit.object });
 
 		client.on('message', function (message) {
-			if (message.unit) {
+			if (message.unit && !unit.dead) {
 				unit.update(message.unit);
 			}
 		});

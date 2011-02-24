@@ -8,17 +8,24 @@ GLOBAL.Field = atom.Class({
 		this.height = height;
 	},
 
-	_shots : {},
+	_shots : [],
 	get shots () {
-		return Object.values(this._shots);
+		this._shots = this._shots.filter(function (shot) {
+			return shot.dead > Date.now();
+		});
+		return this._shots;
 	},
 
-	shoot: (coord) {
-		var point = Point.from(coord);
+	shoot: function (shot) {
+		var point = Point.from(shot);
 		for (var i in this._units) {
-			this._units.checkInjured(point);
+			if (this._units[i].checkInjured(point)) {
+				delete this._units[i];
+			}
 		}
-		this.shots
+		shot.id   = String.uniqueID();
+		shot.dead = Date.now() + 1000;
+		this._shots.push(shot);
 	},
 
 	get units () {

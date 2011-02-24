@@ -3,13 +3,15 @@ new function () {
 var SQRT_2 = (2).sqrt();
 
 GLOBAL.Unit = atom.Class({
-	speed: 100,
+	speed: 150,
 	lastUpdate: 0,
 	lastShot  : 0,
+	health    : 100,
 	weaponReload: 50,
 	initialize: function (id, field) {
 		this.id         = id;
 		this.lastUpdate = Date.now();
+		this.field      = field;
 		this.position   = new Point(field.randomPoint());
 	},
 	update: function (status) {
@@ -28,19 +30,24 @@ GLOBAL.Unit = atom.Class({
 		this.position.move({ x: x.round(), y: y.round() })
 
 		// mouse
-		this.angle = Point.from(status.mouse).angleTo(this.position);
-		
-		// shot
-		if (status.shot && this.lastShot + this.weaponReload < now) {
-			this.lastShot = now;
-			this.field.shoot(status.mouse);
+		if (status.mouse) {
+			this.angle = Point.from(status.mouse).angleTo(this.position);
+
+			// shot
+			if (status.shot && this.lastShot + this.weaponReload < now) {
+				this.lastShot = now;
+				this.field.shoot(status.mouse);
+			}
+		}
+	},
+	checkInjured: function (bullet) {
+		var hit = ((10 - this.position.distanceTo(bullet)) / 2).round();
+		if (hit > 0) this.health -= hit;
+		if (this.health <= 0) {
+			this.dead = true;
 			return true;
 		}
-
 		return false;
-	},
-	injured: function (bullet) {
-
 	},
 	updateTime: function() {
 		var now  = Date.now();
@@ -51,9 +58,10 @@ GLOBAL.Unit = atom.Class({
 	},
 	get object () {
 		return {
-			id: this.id,
-			position : this.position.toObject(),
-			angle: this.angle
+			id      : this.id,
+			position: this.position.toObject(),
+			angle   : this.angle,
+			health  : this.health
 		}
 	}
 });
