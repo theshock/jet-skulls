@@ -14,16 +14,25 @@ new function () {
 
 	io.on('connection', function (client) {
 		client.broadcast({ announcement: client.sessionId + ' connected' });
-		console.log(client.sessionId + ' connected');
 
 		var unit = field.createUnit(client.sessionId);
 
-		client.send     ({ player: unit.object });
-		client.send     ({ units : field.units });
+		var p = unit.position;
+		console.log(client.sessionId + ' connected: [' + p.x + ':' + p.y + ']');
+
+		client.send({
+			screen: field.object,
+			player: unit.object,
+			units : field.units,
+		});
 		client.broadcast({ unit  : unit.object });
 
 		client.on('message', function (message) {
-			if (message.unit) unit.update(message.unit);
+			if (message.unit) {
+				unit.update(message.unit);
+				client.broadcast({ unit: unit.object });
+				client.send     ({ unit: unit.object });
+			}
 		});
 
 		client.on('disconnect', function(){

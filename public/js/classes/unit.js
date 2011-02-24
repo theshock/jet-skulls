@@ -2,13 +2,14 @@ var Unit = atom.Class({
 	Implements: [Drawable],
 
 	position: new Point(0,0),
-	initilize: function (data) {
+	initialize: function (data) {
 		this.update(data);
 	},
 	update: function (data) {
 		this.id    = data.id;
 		this.angle = data.angle;
 		this.position.moveTo(data.position);
+		this.libcanvas && this.libcanvas.update();
 	},
 	draw: function () {
 		this.libcanvas.ctx.stroke(

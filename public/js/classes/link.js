@@ -14,7 +14,7 @@ var Link = atom.Class({
 	},
 
 	send: function (data) {
-		this.socket.send(JSON.stringify(data));
+		this.socket.send(data);
 		return this;
 	},
 

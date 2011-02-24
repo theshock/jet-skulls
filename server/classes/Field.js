@@ -16,10 +16,17 @@ GLOBAL.Field = atom.Class({
 		return array;
 	},
 
+	get object () {
+		return {
+			width : this.width,
+			height: this.height
+		};
+	},
+
 	createUnit: function (id) {
 		var unit = new Unit(id, this);
 		this._units[id] = unit;
-		return this;
+		return unit;
 	},
 
 	getUnit: function (id) {
