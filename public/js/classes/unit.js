@@ -1,4 +1,8 @@
 var Unit = atom.Class({
+	Static: {
+		count: 0
+	},
+	
 	Implements: [Drawable],
 
 	zIndex: 15,
@@ -10,15 +14,25 @@ var Unit = atom.Class({
 	isPlayer: false,
 	position: new Point(0,0),
 	initialize: function (data) {
+		this.zIndex  += ++this.self.count;
 		this.isPlayer = !!data.isPlayer;
 		this.update(data);
 	},
 	update: function (data) {
-		this.id     = data.id;
-		this.angle  = data.angle || 0;
-		this.health = data.health;
-		this.position.moveTo(data.position);
-		this.libcanvas && this.libcanvas.update();
+		if (this.somethingChanged(data)) {
+			this.id     = data.id;
+			this.angle  = data.angle || 0;
+			this.health = data.health;
+			this.position.moveTo(data.position);
+			this.libcanvas && this.libcanvas.update();
+		}
+	},
+	somethingChanged: function (d) {
+		var u = this;
+		return u.id != d.id ||
+			!u.angle.equals(d.angle || 0) ||
+			!u.health.equals(d.health) ||
+			!u.position.equals(d.position);
 	},
 	viewPoint: function () {
 		return this.position.clone()
