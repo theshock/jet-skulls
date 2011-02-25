@@ -17,6 +17,9 @@ var Field = atom.Class({
 		this.units[unit.id] = unit;
 		return unit;
 	},
+	getUnit: function (id) {
+		return this.units[id];
+	},
 	updateUnit: function (unit) {
 		if (this.units[unit.id]) {
 			this.units[unit.id].update(unit);
@@ -69,7 +72,7 @@ var Field = atom.Class({
 			for (var i = shots.length; i--;) {
 				if (!this.shots[shots[i].id]) {
 					this.shots[shots[i].id] = true;
-					this.libcanvas.addElement(new Shot(shots[i]));
+					this.libcanvas.addElement(new Shot(this, shots[i]));
 				}
 			}
 		}

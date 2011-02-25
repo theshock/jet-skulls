@@ -6,10 +6,13 @@ var Shot = atom.Class({
 
 	zIndex: 5,
 
-	initialize: function (data) {
+	initialize: function (field, data) {
+		this.owner    = field.getUnit(data.owner);
+		this.start    = field.getUnit(data.owner).position.clone();
 		this.id       = data.id;
 		this.position = new Point(data.x, data.y);
 		this.radius   = 2;
+		this.rayOpacity = 0.2;
 
 		this.addEvent('libcanvasSet', function () {
 			this.animate({
@@ -20,10 +23,26 @@ var Shot = atom.Class({
 					this.libcanvas.rmElement(this);
 				}.context(this)
 			});
+			this.animate({
+				props: { rayOpacity: 0 },
+				time: 200,
+				onProccess: this.libcanvas.update,
+				onFinish: function () {
+					this.rayOpacity = false;
+				}.context(this)
+			});
 		});
 	},
 
 	draw: function () {
-		this.libcanvas.ctx.fill(new Circle(this.position, this.radius), '#999');
+		var ctx = this.libcanvas.ctx
+			.fill(new Circle(this.position, this.radius), '#a96');
+			
+		if (this.rayOpacity) {
+			ctx.save()
+			   .set({ globalAlpha: this.rayOpacity })
+			   .stroke(new Line(this.owner.position, this.position), '#fda')
+			   .restore()
+		}
 	}
 });
