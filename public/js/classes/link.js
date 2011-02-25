@@ -1,9 +1,18 @@
 var Link = atom.Class({
-	Implements: [atom.Class.Events],
+	Implements: [
+		atom.Class.Events,
+		atom.Class.Options
+	],
+
+	options: {
+		host: location.host,
+		port: 8124
+	},
 
 	socket: null,
-	initialize: function (port) {
-		this.socket = new io.Socket(location.host, { port : port });
+	initialize: function (options) {
+		this.setOptions(options);
+		this.socket = new io.Socket(this.options.host, { port : this.options.port });
 		this.socket.on('connect', this._onConnect.context(this));
 		this.socket.on('message', this._onMessage.context(this));
 	},

@@ -3,12 +3,12 @@ LibCanvas.extract();
 
 atom(function () {
 	
-	var jet = new Jet({
+	var field = new Field({
 		element : '#jet',
-		server  : 6660
+		server  : { port: 6660 }
 	});
 
-	jet.controls = new Controls(jet, {
+	field.controls = new Controls(field, {
 		up   : 'w',
 		down : 's',
 		left : 'a',

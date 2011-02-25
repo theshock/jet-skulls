@@ -1,4 +1,4 @@
-var Jet = atom.Class({
+var Field = atom.Class({
 	initialize: function (options) {
 		this.libcanvas = new LibCanvas(options.element).start();
 		this.link      = new Link(options.server).connect();

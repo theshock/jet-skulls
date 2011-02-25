@@ -1,8 +1,8 @@
 var Controls = atom.Class({
-	initialize: function (jet, controls) {
-		this.jet = jet;
+	initialize: function (field, controls) {
+		this.field = field;
 
-		var lc = jet.libcanvas
+		var lc = field.libcanvas
 			.listenKeyboard(Object.values(controls))
 			.listenMouse(),
 		key = lc.getKey.context(lc);
@@ -26,7 +26,7 @@ var Controls = atom.Class({
 		}.context(this));
 	},
 	send: function (data) {
-		this.jet.link.send({
+		this.field.link.send({
 			unit: data
 		});
 	}
