@@ -18,9 +18,11 @@ provides: LibCanvas
 */
 
 
-new function () {
+(function () {
 
-var LibCanvas = window.LibCanvas = atom.Class({
+var global = (this.window || GLOBAL);
+
+var LibCanvas = global.LibCanvas = atom.Class({
 	Static: {
 		Buffer: function (width, height, withCtx) {
 			var a = Array.pickFrom(arguments), zero = (width == null || width === true);
@@ -54,13 +56,16 @@ var LibCanvas = window.LibCanvas = atom.Class({
 			});
 			return current;
 		},
-		extract: function (to, what) {
-			to = to || window;
+		extract: function (to) {
+			to = to || global;
+
 			for (var i in {Shapes: 1, Behaviors: 1, Utils: 1}) {
-				if (!what || what.contains(i)) atom.extend(to, LibCanvas[i]);
+				for (var k in LibCanvas[i]) {
+					to[k] = LibCanvas[i][k];
+				}
 			}
-			for (i in {Point: 1, Animation: 1, Buffer: 1}) {
-				if (!what || what.contains(i)) to[i] = LibCanvas[i];
+			for (i in {Point: 1, Animation: 1}) {
+				to[i] = LibCanvas[i];
 			}
 			return to;
 		},
@@ -82,44 +87,8 @@ atom(function () {
 	LibCanvas.invoker.invoke();
 });
 
-// Changing HTMLCanvasElement.prototype.getContext, so we
-// can create our own contexts by LibCanvas.addCanvasContext(name, ctx);
 
-atom.extend(HTMLCanvasElement, {
-	_newContexts: {},
-	addContext: function (name, ctx) {
-		this._newContexts[name] = ctx;
-		return this;
-	},
-	getContext: function (name) {
-		return this._newContexts[name] || null;
-	}
-});
-
-atom.implement(HTMLCanvasElement, {
-	getOriginalContext: HTMLCanvasElement.prototype.getContext,
-	getContext: function (type) {
-		if (!this.contextsList) {
-			this.contextsList = {};
-		}
-
-		if (!this.contextsList[type]) {
-			var ctx = HTMLCanvasElement.getContext(type);
-			if (ctx) {
-				ctx = new ctx(this);
-			} else try {
-				ctx = this.getOriginalContext.apply(this, arguments);
-			} catch (e) {
-				throw (!e.toString().match(/NS_ERROR_ILLEGAL_VALUE/)) ? e :
-					new TypeError('Wrong Context Type: «' + type + '»');
-			}
-			this.contextsList[type] = ctx;
-		}
-		return this.contextsList[type];
-	}
-});
-
-};
+})();
 
 /*
 ---
@@ -500,11 +469,10 @@ provides: Behaviors.Animatable
 ...
 */
 
-new function () {
+(function (LibCanvas) {
 
-var LibCanvas = window.LibCanvas,
-	TF        = LibCanvas.Inner.TimingFunctions,
-	Color     = LibCanvas.Utils.Color;
+var TF    = LibCanvas.Inner.TimingFunctions,
+	Color = LibCanvas.Utils.Color;
 
 LibCanvas.namespace('Behaviors').Animatable = atom.Class({
 	Implements: [LibCanvas.Invoker.AutoChoose],
@@ -618,7 +586,7 @@ LibCanvas.namespace('Behaviors').Animatable = atom.Class({
 	}
 });
 
-};
+})(LibCanvas);
 
 /*
 ---
@@ -905,15 +873,15 @@ var Point = LibCanvas.Point = atom.Class({
 		return accuracy == null ? (to.x == this.x && to.y == this.y) :
 			(this.x.equals(to.x, accuracy) && this.y.equals(to.y, accuracy));
 	},
-	snapToPixel: function (minus) {
-		var shift = minus ? -0.5 : 0.5;
-		return this.clone().move({ x: shift, y: shift });
-	},
 	toObject: function () {
 		return {
 			x: this.x,
 			y: this.y
 		};
+	},
+	snapToPixel: function (minus) {
+		var shift = minus ? -0.5 : 0.5;
+		return this.clone().move({ x: shift, y: shift });
 	},
 	clone : function () {
 		return new Point(this);
@@ -2493,10 +2461,9 @@ provides: Utils.ProgressBar
 ...
 */
 
-new function () {
+(function (LibCanvas) {
 
-var LibCanvas = window.LibCanvas,
-	Buffer    = LibCanvas.Buffer,
+var Buffer    = LibCanvas.Buffer,
 	Rectangle = LibCanvas.Shapes.Rectangle,
 	Polygon   = LibCanvas.Shapes.Polygon,
 	Point     = LibCanvas.Point;
@@ -2611,7 +2578,7 @@ LibCanvas.namespace('Utils').ProgressBar = atom.Class({
 	}
 });
 
-}();
+})(LibCanvas);
 
 /*
 ---
@@ -3028,6 +2995,60 @@ LibCanvas.namespace('Shapes').Circle = atom.Class({
 /*
 ---
 
+name: "Utils.Canvas"
+
+description: "Provides some Canvas extensions"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- LibCanvas
+
+provides: Utils.Canvas
+
+...
+*/
+
+atom.extend(HTMLCanvasElement, {
+	_newContexts: {},
+	addContext: function (name, ctx) {
+		this._newContexts[name] = ctx;
+		return this;
+	},
+	getContext: function (name) {
+		return this._newContexts[name] || null;
+	}
+});
+
+atom.implement(HTMLCanvasElement, {
+	getOriginalContext: HTMLCanvasElement.prototype.getContext,
+	getContext: function (type) {
+		if (!this.contextsList) {
+			this.contextsList = {};
+		}
+
+		if (!this.contextsList[type]) {
+			var ctx = HTMLCanvasElement.getContext(type);
+			if (ctx) {
+				ctx = new ctx(this);
+			} else try {
+				ctx = this.getOriginalContext.apply(this, arguments);
+			} catch (e) {
+				throw (!e.toString().match(/NS_ERROR_ILLEGAL_VALUE/)) ? e :
+					new TypeError('Wrong Context Type: «' + type + '»');
+			}
+			this.contextsList[type] = ctx;
+		}
+		return this.contextsList[type];
+	}
+});
+
+/*
+---
+
 name: "Context2D"
 
 description: "LibCanvas.Context2D adds new canvas context '2d-libcanvas'"
@@ -3042,16 +3063,16 @@ requires:
 	- Point
 	- Shapes.Rectangle
 	- Shapes.Circle
+	- Utils.Canvas
 
 provides: Context2D
 
 ...
 */
 
-new function () {
+(function (LibCanvas) {
 
-var LibCanvas = window.LibCanvas,
-	Point     = LibCanvas.Point,
+var Point     = LibCanvas.Point,
 	Shapes    = LibCanvas.namespace('Shapes'),
 	Rectangle = Shapes.Rectangle,
 	Circle    = Shapes.Circle,
@@ -3674,7 +3695,7 @@ LibCanvas.Context2D.office = office;
 
 HTMLCanvasElement.addContext('2d-libcanvas', LibCanvas.Context2D);
 
-};
+})(LibCanvas);
 
 /*
 ---
@@ -4783,9 +4804,9 @@ provides: Shapes.Path
 ...
 */
 
-new function () {
+(function (LibCanvas) {
 
-var LibCanvas = window.LibCanvas, Point = LibCanvas.Point, Shapes = LibCanvas.Shapes;
+var Point = LibCanvas.Point, Shapes = LibCanvas.Shapes;
 
 var Path = LibCanvas.namespace('Shapes').Path = atom.Class({
 	Extends: LibCanvas.Shape,
@@ -4959,7 +4980,7 @@ LibCanvas.namespace('Shapes.Path').Builder = atom.Class({
 	}
 });
 
-}();
+})(LibCanvas);
 
 /*
 ---
@@ -5185,8 +5206,15 @@ LibCanvas.namespace('Utils').AudioElement = atom.Class({
 	},
 	src : function (file) {
 		if (this.stub) return this;
+		var gatling = file.match(/:(\d+)$/);
+		if (gatling) {
+			file = file.replace(/:\d+$/, '');
+			gatling = gatling[1];
+			console.log(gatling)
+		}
 		this.audio.src = file.replace(/\*/g, this.getExtension());
 		this.audio.load();
+		if (gatling) this.gatling(gatling);
 		return this;
 	},
 	getExtension : function () {
@@ -5209,14 +5237,14 @@ LibCanvas.namespace('Utils').AudioElement = atom.Class({
 		audioClone.load();
 		return audioClone;
 	},
-	play : function () {
+	play : function (elem) {
 		if (this.stub) return this;
-		this.getCurrent().play();
+		(elem || this.getCurrent()).play();
 		return this;
 	},
-	pause : function () {
+	pause : function (elem) {
 		if (this.stub) return this;
-		this.getCurrent().pause();
+		(elem || this.getCurrent()).pause();
 		return this;
 	},
 	stop : function (elem) {
@@ -5227,6 +5255,14 @@ LibCanvas.namespace('Utils').AudioElement = atom.Class({
 			elem.currentTime = 0.025;
 		}
 		elem.pause();
+		return this;
+	},
+	restart: function (elem) {
+		elem = elem || this.getCurrent();
+		elem.currentTime = 0.025;
+		if (elem.ended || elem.paused) {
+			elem.play();
+		}
 		return this;
 	},
 	events : [],
@@ -5256,9 +5292,8 @@ LibCanvas.namespace('Utils').AudioElement = atom.Class({
 	},
 	playNext : function () {
 		if (this.stub) return this;
-		var elem = this.getNext();
-		this.stop(elem);
-		elem.play();
+		this.getNext();
+		this.restart();
 		return this;
 	},
 
@@ -5317,10 +5352,9 @@ provides: Utils.Image
 ...
 */
 
-new function () {
+(function (LibCanvas) {
 
-var LibCanvas = window.LibCanvas,
-	Point     = LibCanvas.Point,
+var Point     = LibCanvas.Point,
 	Buffer    = LibCanvas.Buffer,
 	Rectangle = LibCanvas.Shapes.Rectangle,
 	math      = Math,
@@ -5419,7 +5453,7 @@ atom.implement(HTMLCanvasElement, {
 	toCanvas : function () { return this; }
 });
 	
-}();
+})(LibCanvas);
 
 /*
 ---

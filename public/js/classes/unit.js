@@ -56,7 +56,7 @@ var Unit = atom.Class({
 	get healthColor() {
 		var health = this.health;
 
-		return health > 75 ? ['#090', '#030']:
+		return health > 75 ? ['#090', '#060']:
 		       health > 50 ? ['#0f0', '#090']:
 		       health > 25 ? ['#ff0', '#990']:
 		                     ['#f00', '#900'];

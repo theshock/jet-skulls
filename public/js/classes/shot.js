@@ -31,6 +31,7 @@ var Shot = atom.Class({
 					this.rayOpacity = false;
 				}.context(this)
 			});
+			this.libcanvas.getAudio('shot').playNext();
 		});
 	},
 

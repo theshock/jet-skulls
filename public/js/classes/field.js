@@ -3,6 +3,9 @@ var Field = atom.Class({
 		this.libcanvas = new LibCanvas(options.element, {
 			preloadImages: {
 				aim : 'images/aim.png'
+			},
+			preloadAudio: {
+				shot: 'sounds/shot.*:12'
 			}
 		}).start();
 		this.link      = new Link(options.server).connect();
