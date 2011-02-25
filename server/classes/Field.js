@@ -62,7 +62,7 @@ GLOBAL.Field = atom.Class({
 	},
 
 	deleteUnit: function (unit) {
-		delete this.units[unit.id];
+		delete this._units[unit.id];
 		return this;
 	},
 
