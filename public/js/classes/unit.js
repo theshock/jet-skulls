@@ -23,13 +23,14 @@ var Unit = atom.Class({
 			this.id     = data.id;
 			this.angle  = data.angle || 0;
 			this.health = data.health;
+			this.radius = data.radius;
 			this.position.moveTo(data.position);
 			this.libcanvas && this.libcanvas.update();
 		}
 	},
 	somethingChanged: function (d) {
 		var u = this;
-		return u.id != d.id ||
+		return !u.id ||
 			!u.angle.equals(d.angle || 0) ||
 			!u.health.equals(d.health) ||
 			!u.position.equals(d.position);
@@ -87,10 +88,13 @@ var Unit = atom.Class({
 	draw: function () {
 		var lc = this.libcanvas;
 		if (this.isPlayer && lc.mouse.inCanvas) {
-			lc.ctx.stroke(new Circle(lc.mouse.point.snapToPixel(), 4), '#ff0')
+			lc.ctx.drawImage({
+				image : this.libcanvas.getImage('aim'),
+				center: lc.mouse.point
+			})
 		}
 		var color  = this.isPlayer ? 'green' : 'red';
-		var circle = new Circle(this.position.snapToPixel(), 10);
+		var circle = new Circle(this.position.snapToPixel(), this.radius);
 		lc.ctx
 			.stroke(new Line(this.position.snapToPixel(), this.viewPoint()), color)
 			.fill(circle, 'black').stroke(circle, color)

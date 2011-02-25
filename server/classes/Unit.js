@@ -6,6 +6,7 @@ GLOBAL.Unit = atom.Class({
 	speed: 150,
 	lastUpdate: 0,
 	lastShot  : 0,
+	radius    : 7,
 	health    : 100,
 	weaponReload: 50,
 	initialize: function (id, field) {
@@ -44,6 +45,7 @@ GLOBAL.Unit = atom.Class({
 		var hit = ((10 - this.position.distanceTo(bullet)) / 2).round();
 		if (hit > 0) this.health -= hit;
 		if (this.health <= 0) {
+			this.health = 0;
 			this.dead = true;
 			return true;
 		}
@@ -61,7 +63,8 @@ GLOBAL.Unit = atom.Class({
 			id      : this.id,
 			position: this.position.toObject(),
 			angle   : this.angle,
-			health  : this.health
+			health  : this.health,
+			radius  : this.radius
 		}
 	}
 });

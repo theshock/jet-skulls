@@ -1,6 +1,10 @@
 var Field = atom.Class({
 	initialize: function (options) {
-		this.libcanvas = new LibCanvas(options.element).start();
+		this.libcanvas = new LibCanvas(options.element, {
+			preloadImages: {
+				aim : 'images/aim.png'
+			}
+		}).start();
 		this.link      = new Link(options.server).connect();
 
 		this.link.addEvent('connect', this.start.context(this));
@@ -28,21 +32,23 @@ var Field = atom.Class({
 		}
 		return this;
 	},
-	deleteUnit: function (unit) {
-		if (this.units[unit.id]) {
-			unit = this.units[unit.id];
-			delete this.units[unit.id];
+	deleteUnit: function (id) {
+		if (this.units[id]) {
+			var unit = this.units[id];
+			delete this.units[id];
 			this.libcanvas.rmElement(unit);
 		}
 		return this;
 	},
 
 	message: function (data) {
-		for (var i in data) {
-			if (i in this.actions) {
-				this.actions[i].call(this, data[i])
-			} else {
-				atom.log('No action «' + i + '»');
+		if ('player' in data || 'playerId' in this) {
+			for (i in data) {
+				if (i in this.actions) {
+					this.actions[i].call(this, data[i])
+				} else {
+					atom.log('No action «' + i + '»');
+				}
 			}
 		}
 	},
@@ -51,6 +57,7 @@ var Field = atom.Class({
 			this.libcanvas.set(screen);
 		},
 		player: function (player) {
+			this.playerId = player.id;
 			player.isPlayer = true;
 			this.createUnit(player);
 		},
@@ -66,7 +73,7 @@ var Field = atom.Class({
 			atom.log('Announcement: «' + msg + '»');
 		},
 		disconnect: function (unit) {
-			this.deleteUnit(unit);
+			this.deleteUnit(unit.id);
 		},
 		shots: function (shots) {
 			for (var i = shots.length; i--;) {
@@ -74,6 +81,21 @@ var Field = atom.Class({
 					this.shots[shots[i].id] = true;
 					this.libcanvas.addElement(new Shot(this, shots[i]));
 				}
+			}
+		},
+		dead: function (death) {
+			var id = death.unit.id;
+			this.deleteUnit(id);
+			if (id == this.playerId) {
+				atom()
+					.create('p')
+					.css({
+						font : 'bold 36px sans-serif',
+						color: 'red',
+						padding: '0 20px'
+					})
+					.html('You are dead!')
+					.appendTo('body');
 			}
 		}
 	}

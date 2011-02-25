@@ -54,7 +54,7 @@ provides: atom
 		var ext = proto ? elem[prototype] : elem;
 		for (var i in from) {
 			if (safe && i in ext) continue;
-
+			
 			if ( !implementAccessors(from, ext, i) ) {
 				ext[i] = i == 'prototype' ? from[i] : clone(from[i]);
 			}
@@ -137,7 +137,7 @@ provides: atom
 	};
 	var merge = function(source, k, v){
 		if (typeOf(k) == 'string') return mergeOne(source, k, v);
-
+		
 		for (var i = 1, l = arguments.length; i < l; i++){
 			var object = arguments[i];
 			if (object) {
@@ -148,7 +148,7 @@ provides: atom
 		}
 		return source;
 	};
-
+	
 	var extend = atom.extend = function (elem, safe, from) {
 		return innerExtend(arguments, atom, false);
 	};
@@ -502,7 +502,7 @@ atom.implement({
 
 		atom.ajax(atom.extend(config, {
 			onError: config.onError.bind(this),
-			onLoad : config.onLoad .bind(this)
+			onLoad : config.onLoad .bind(this)			
 		}));
 		return this;
 	}
@@ -601,7 +601,7 @@ var reset = function(object){
 var wrap = function(self, key, method){
 	// if method is already wrapped
 	if (method.$origin) method = method.$origin;
-
+	
 	var wrapper = extend(function(){
 		if (method.$protected && !this.$caller) throw new Error('The method «' + key + '» is protected.');
 		var current = this.$caller;
@@ -610,7 +610,7 @@ var wrap = function(self, key, method){
 		this.$caller = current;
 		return result;
 	}, {$owner: self, $origin: method, $name: key});
-
+	
 	return wrapper;
 };
 
@@ -843,9 +843,11 @@ atom.extend(Class, {
 			return this;
 		},
 		readyEvent: function (name, args) {
-			name = removeOn(name);
-			this.events.$ready[name] = args || [];
-			nextTick(this.fireEvent.context(this, [name, args || []]));
+			nextTick(function () {
+				name = removeOn(name);
+				this.events.$ready[name] = args || [];
+				this.fireEvent(name, args || []);
+			}.context(this));
 			return this;
 		}
 	})
@@ -1126,6 +1128,10 @@ provides: Function
 */
 
 new function () {
+	var getContext = function (bind, self) {
+		return (bind === false || bind === Function.context) ? self : bind;
+	};
+	
 	atom.extend(Function, 'safe', {
 		lambda : function (value) {
 			var returnThis = (arguments.length == 0);
@@ -1146,7 +1152,13 @@ new function () {
 			var fn = this;
 			args = args ? atom.toArray(args) : [];
 			return function(){
-				return fn.apply((bind === false || bind === Function.context) ? this : bind, [].append(args, arguments));
+				return fn.apply(getContext(bind, this), [].append(args, arguments));
+			};
+		},
+		only: function(numberOfArgs, bind) {
+			var fn = this;
+			return function() {
+				return fn.apply(getContext(bind, this), [].slice.call(arguments,0,numberOfArgs))
 			};
 		}
 	});
@@ -1170,7 +1182,7 @@ new function () {
 		delay:      timeout.run.context(Function.context, ['Timeout']),
 		periodical: timeout.run.context(Function.context, ['Interval'])
 	});
-}();
+}(); 
 
 
 /*
@@ -1237,7 +1249,7 @@ atom.implement(Number, 'safe', {
 ['abs','acos','asin','atan','atan2','ceil','cos','exp','floor','log','max','min','pow','sin','sqrt','tan']
 	.forEach(function(method) {
 		if (Number[method]) return;
-
+		
 		Number.prototype[method] = function() {
 			return Math[method].apply(null, [this].append(arguments));
 		};
@@ -1356,7 +1368,6 @@ String.uniqueID = function () {
 	return (UID++).toString(36);
 };
 
-
 atom.implement(String, 'safe', {
 	safeHtml: function () {
 		return this.replaceAll(safeHtmlRE, {
@@ -1399,4 +1410,4 @@ atom.implement(String, 'safe', {
 
 }();
 
-
+ 

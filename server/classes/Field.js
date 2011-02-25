@@ -26,8 +26,10 @@ GLOBAL.Field = atom.Class({
 	shoot: function (shot, player) {
 		var point = Point.from(shot);
 		for (var i in this._units) {
-			if (this._units[i].checkInjured(point)) {
-				delete this._units[i];
+			var unit = this._units[i];
+			if (unit.checkInjured(point)) {
+				this.deleteUnit(unit);
+				this.sendAll({ dead: { unit: unit.object }});
 			}
 		}
 		shot.owner = player.id;
@@ -73,6 +75,11 @@ GLOBAL.Field = atom.Class({
 		);
 	},
 	
+	sendAll: function (data) {
+		this.links.invoke('send', data);
+		return this;
+	},
+	
 	links: [],
 	createLink: function (client) {
 		var field = this,
@@ -84,7 +91,7 @@ GLOBAL.Field = atom.Class({
 					client.send({
 						screen: field.object,
 						player: unit.object,
-						units : field.units,
+						units : field.units
 					});
 				})
 				.addEvent('message', function (message) {
@@ -94,8 +101,9 @@ GLOBAL.Field = atom.Class({
 				})
 				.addEvent('disconnect', function () {
 					field.deleteUnit(unit);
-					client.broadcast({ disconnected: link.id });
 					link.announcement('disconnected');
+					field.links.erase(link);
+					field.sendAll({ disconnected: link.id });
 				});
 		this.links.push(link);
 	}
