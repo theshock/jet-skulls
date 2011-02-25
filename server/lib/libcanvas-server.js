@@ -58,10 +58,10 @@ var LibCanvas = global.LibCanvas = atom.Class({
 		},
 		extract: function (to) {
 			to = to || global;
-			
+
 			for (var i in {Shapes: 1, Behaviors: 1, Utils: 1}) {
 				for (var k in LibCanvas[i]) {
-					to[k] = LibCanvas[i];
+					to[k] = LibCanvas[i][k];
 				}
 			}
 			for (i in {Point: 1, Animation: 1}) {
@@ -375,15 +375,15 @@ var Point = LibCanvas.Point = atom.Class({
 		return accuracy == null ? (to.x == this.x && to.y == this.y) :
 			(this.x.equals(to.x, accuracy) && this.y.equals(to.y, accuracy));
 	},
-	snapToPixel: function (minus) {
-		var shift = minus ? -0.5 : 0.5;
-		return this.clone().move({ x: shift, y: shift });
-	},
 	toObject: function () {
 		return {
 			x: this.x,
 			y: this.y
 		};
+	},
+	snapToPixel: function (minus) {
+		var shift = minus ? -0.5 : 0.5;
+		return this.clone().move({ x: shift, y: shift });
 	},
 	clone : function () {
 		return new Point(this);
@@ -391,4 +391,326 @@ var Point = LibCanvas.Point = atom.Class({
 });
 
 };
+
+/*
+---
+
+name: "Shape"
+
+description: "Abstract class LibCanvas.Shape defines interface for drawable canvas objects"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- LibCanvas
+	- Geometry
+	- Point
+
+provides: Shape
+
+...
+*/
+
+LibCanvas.Shape = atom.Class({
+	Extends : LibCanvas.Geometry,
+	set     : atom.Class.abstractMethod,
+	hasPoint: atom.Class.abstractMethod,
+	draw : function (ctx, type) {
+		this.processPath(ctx)[type]();
+		return this;
+	},
+	// Методы ниже рассчитывают на то, что в фигуре есть точки from и to
+	getCoords : function () {
+		return this.from;
+	},
+	get x () {
+		return this.getCoords().x;
+	},
+	get y () {
+		return this.getCoords().y;
+	},
+	set x (x) {
+		return this.move({ x : x - this.x, y : 0 });
+	},
+	set y (y) {
+		return this.move({ x : 0, y : y - this.y });
+	},
+	getCenter : function () {
+		return new Point(
+			(this.from.x + this.to.x) / 2,
+			(this.from.y + this.to.y) / 2
+		);
+	},
+	move : function (distance, reverse) {
+		distance = this.invertDirection(distance, reverse);
+		this.from.move(distance);
+		this. to .move(distance);
+		return this.parent(distance);
+	},
+	equals : function (shape, accuracy) {
+		return shape.from.equals(this.from, accuracy) && shape.to.equals(this.to, accuracy);
+	},
+	clone : function () {
+		return new this.self(this.from.clone(), this.to.clone());
+	},
+	getPoints : function () {
+		return { from : this.from, to : this.to };
+	}
+});
+
+/*
+---
+
+name: "Shapes.Rectangle"
+
+description: "Provides rectangle as canvas object"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- LibCanvas
+	- Point
+	- Shape
+
+provides: Shapes.Rectangle
+
+...
+*/
+
+new function () {
+
+var Point = LibCanvas.Point,
+	math = Math,
+	min = math.min,
+	max = math.max,
+	isReal = Object.isReal,
+	random = Number.random;
+
+LibCanvas.namespace('Shapes').Rectangle = atom.Class({
+	Extends: LibCanvas.Shape,
+	set : function () {
+		var a = Array.pickFrom(arguments);
+
+		if (a.length == 4) {
+			this.from = new Point(a[0], a[1]);
+			this.to   = this.from.clone().move({x:a[2], y:a[3]});
+		} else if (a.length == 2) {
+			this.from = Point.from(a[0]);
+			this.to   = Point.from(a[1]);
+		} else {
+			a = a[0];
+			if (a.from) {
+				this.from = Point.from(a.from);
+			} else if ('x' in a && 'y' in a) {
+				this.from = new Point(a.x, a.y);
+			}
+			if (a.to) this.to = Point.from(a.to);
+		
+			if (!a.from || !a.to) {
+				var as = a.size, size = {
+					x : (as ? [as.w, as[0], as.width ] : [ a.w, a.width  ]).pick(),
+					y : (as ? [as.h, as[1], as.height] : [ a.h, a.height ]).pick()
+				};
+				this.from ?
+					(this.to = this.from.clone().move(size, 0)) :
+					(this.from = this.to.clone().move(size, 1));
+			}
+		
+		}
+		return this;
+	},
+
+	get width() {
+		return this.to.x - this.from.x;
+	},
+	get height() {
+		return this.to.y - this.from.y;
+	},
+	set width (width) {
+		this.to.moveTo({ x : this.from.x + width, y : this.to.y });
+	},
+	set height (height) {
+		this.to.moveTo({ x : this.to.x, y : this.from.y + height });
+		return this;
+	},
+	get size () {
+		return {
+			width : this.width,
+			height: this.height
+		};
+	},
+	set size (size) {
+		this.width  = size.width;
+		this.height = size.height;
+	},
+	// @deprecated 
+	getWidth : function () {
+		return this.width;
+	},
+	// @deprecated
+	getHeight : function () {
+		return this.height;
+	},
+	// @deprecated 
+	setWidth : function (width) {
+		this.width = width;
+		return this;
+	},
+	// @deprecated
+	setHeight : function (height) {
+		this.height = height;
+		return this;
+	},
+	hasPoint : function (point, padding) {
+		point   = Point.from(arguments);
+		padding = padding || 0;
+		return point.x != null && point.y != null
+			&& point.x.between(min(this.from.x, this.to.x) + padding, max(this.from.x, this.to.x) - padding, 1)
+			&& point.y.between(min(this.from.y, this.to.y) + padding, max(this.from.y, this.to.y) - padding, 1);
+	},
+	draw : function (ctx, type) {
+		// fixed Opera bug - cant drawing rectangle with width or height below zero
+		ctx.original(type + 'Rect', [
+			min(this.from.x, this.to.x),
+			min(this.from.y, this.to.y),
+			this.getWidth() .abs(),
+			this.getHeight().abs()
+		]);
+		return this;
+	},
+	processPath : function (ctx, noWrap) {
+		if (!noWrap) ctx.beginPath();
+		ctx
+			.moveTo(this.from.x, this.from.y)
+			.lineTo(this.to.x, this.from.y)
+			.lineTo(this.to.x, this.to.y)
+			.lineTo(this.from.x, this.to.y)
+			.lineTo(this.from.x, this.from.y);
+		if (!noWrap) ctx.closePath();
+		return ctx;
+	},
+	getRandomPoint : function (margin) {
+		margin = margin || 0;
+		return new Point(
+			random(margin, this.getWidth()  - margin),
+			random(margin, this.getHeight() - margin)
+		);
+	},
+	translate : function (point, fromRect) {
+		var diff = fromRect.from.diff(point);
+		return new Point({
+			x : (diff.x / fromRect.getWidth() ) * this.getWidth(),
+			y : (diff.y / fromRect.getHeight()) * this.getHeight()
+		});
+	}
+});
+
+}();
+
+/*
+---
+
+name: "Shapes.Circle"
+
+description: "Provides circle as canvas object"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- LibCanvas
+	- Point
+	- Shape
+
+provides: Shapes.Circle
+
+...
+*/
+
+new function () {
+
+var Point = LibCanvas.Point;
+	
+LibCanvas.namespace('Shapes').Circle = atom.Class({
+	Extends: LibCanvas.Shape,
+	set : function () {
+		var a = Array.pickFrom(arguments);
+
+		if (a.length >= 3) {
+			this.center = new Point(a[0], a[1]);
+			this.radius = a[2];
+		} else if (a.length == 2) {
+			this.center = Point.from(a[0]);
+			this.radius = a[1];
+		} else {
+			a = a[0];
+			this.radius = [a.r, a.radius].pick();
+			if ('x' in a && 'y' in a) {
+				this.center = new Point(a[0], a[1]);
+			} else if ('center' in a) {
+				this.center = Point.from(a.center);
+			} else if ('from' in a) {
+				this.center = new Point(a.from).move({
+					x: this.radius,
+					y: this.radius
+				});
+			}
+		}
+		if (this.center == null) throw new TypeError('center is null');
+		if (this.radius == null) throw new TypeError('radius is null');
+	},
+	getCoords : function () {
+		return this.center;
+	},
+	hasPoint : function (point) {
+		point = Point.from(arguments);
+		return this.center.distanceTo(point) <= this.radius;
+	},
+	scale : function (factor) {
+		this.center.scale(factor);
+		return this;
+	},
+	getCenter: function () {
+		return this.center;
+	},
+	intersect : function (obj) {
+		if (obj instanceof this.self) {
+			return this.center.distanceTo(obj.center) < this.radius + obj.radius;
+		}
+		return false;
+	},
+	move : function (distance, reverse) {
+		distance = this.invertDirection(distance, reverse);
+		this.center.move(distance);
+		this.fireEvent('move', [distance]);
+		return this;
+	},
+	processPath : function (ctx, noWrap) {
+		if (!noWrap) ctx.beginPath();
+		if (this.radius) {
+			ctx.arc({
+				circle : this,
+				angle  : [0, (360).degree()]
+			});
+		}
+		if (!noWrap) ctx.closePath();
+		return ctx;
+	},
+	clone : function () {
+		return new this.self(this.center.clone(), this.radius);
+	},
+	getPoints : function () {
+		return { center : this.center };
+	}
+});
+
+}();
  

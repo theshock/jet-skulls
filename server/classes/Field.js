@@ -6,6 +6,7 @@ GLOBAL.Field = atom.Class({
 	initialize: function (width, height) {
 		this.width  = width;
 		this.height = height;
+		this.rect   = new Rectangle(0,0,width,height);
 		
 		(function () {
 			this.links.invoke('send', {

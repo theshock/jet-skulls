@@ -8,7 +8,7 @@ GLOBAL.Unit = atom.Class({
 	lastShot  : 0,
 	radius    : 7,
 	health    : 100,
-	weaponReload: 50,
+	weaponReload:200,
 	initialize: function (id, field) {
 		this.id         = id;
 		this.lastUpdate = Date.now();
@@ -48,7 +48,7 @@ GLOBAL.Unit = atom.Class({
 			}
 			
 			// предположительное месторасположение
-			var dir = [[x,y], [x,0], [0,y]];
+			var dir = [new Point(x,y), new Point(x,0), new Point(0,y)];
 			for (var i = 0; i < dir.length; i++) {
 				var newPos = this.position.clone().move(dir[i]);
 				if (!this.isCollisionIn(newPos)) {
@@ -60,6 +60,8 @@ GLOBAL.Unit = atom.Class({
 	},
 	isCollisionIn: function (position) {
 		var diameter = this.radius*2;
+		if (!this.field.rect.hasPoint(position, this.radius)) return true;
+		
 		for (var i in this.field._units) {
 			var unit = this.field._units[i];
 			if (unit != this && unit.position.distanceTo(position) < diameter) {
