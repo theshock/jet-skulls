@@ -47,6 +47,9 @@ GLOBAL.Unit = atom.Class({
 				distance = x || y;
 			}
 			
+			x = x.round();
+			y = y.round();
+			
 			// предположительное месторасположение
 			var dir = [new Point(x,y), new Point(x,0), new Point(0,y)];
 			for (var i = 0; i < dir.length; i++) {
