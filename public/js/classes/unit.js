@@ -5,7 +5,7 @@ var Unit = atom.Class({
 	
 	Implements: [Drawable],
 
-	zIndex: 15,
+	zIndex: 16,
 	
 	healthShift: {x: 0, y: 15},
 	healthRectWidth: 30,
@@ -14,9 +14,19 @@ var Unit = atom.Class({
 	isPlayer: false,
 	position: new Point(0,0),
 	initialize: function (data) {
-		this.zIndex  += ++this.self.count;
 		this.isPlayer = !!data.isPlayer;
+		this.zIndex   = this.genZ();
 		this.update(data);
+	},
+	genZ: function () {
+		if (this.isPlayer) {
+			return 128;
+		}
+		// могут быть баги, если сгенерируется много игроков, пока не критично
+		if (++this.self.count >= 128) {
+			this.self.count = 16;
+		}
+		return this.self.count;
 	},
 	update: function (data) {
 		if (this.somethingChanged(data)) {
