@@ -3,7 +3,7 @@ new function () {
 var SQRT_2 = (2).sqrt();
 
 GLOBAL.Unit = atom.Class({
-	_speed: 150,
+	_speed: 200,
 	lastUpdate: 0,
 	lastShot  : 0,
 	radius    : 7,
@@ -16,7 +16,7 @@ GLOBAL.Unit = atom.Class({
 		this.position   = new Point(field.randomPoint());
 	},
 	get speed () {
-		return this._speed * (this.health > 25 ? 1 : 0.5);
+		return this._speed - (100 - this.health);
 	},
 	update: function (status) {
 		var now  = Date.now();
