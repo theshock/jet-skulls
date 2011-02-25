@@ -36,7 +36,7 @@ GLOBAL.Unit = atom.Class({
 			// shot
 			if (status.shot && this.lastShot + this.weaponReload < now) {
 				this.lastShot = now;
-				this.field.shoot(status.mouse);
+				this.field.shoot(status.mouse, this);
 			}
 		}
 	},

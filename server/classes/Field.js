@@ -23,15 +23,16 @@ GLOBAL.Field = atom.Class({
 		return this._shots;
 	},
 
-	shoot: function (shot) {
+	shoot: function (shot, player) {
 		var point = Point.from(shot);
 		for (var i in this._units) {
 			if (this._units[i].checkInjured(point)) {
 				delete this._units[i];
 			}
 		}
-		shot.id   = String.uniqueID();
-		shot.dead = Date.now() + 1000;
+		shot.owner = player.id;
+		shot.id    = String.uniqueID();
+		shot.dead  = Date.now() + 1000;
 		this._shots.push(shot);
 	},
 
