@@ -13,9 +13,12 @@ var Unit = atom.Class({
 
 	isPlayer: false,
 	position: new Point(0,0),
-	initialize: function (data) {
+	initialize: function (field, data) {
+		this.field    = field;
+		this.trace    = new Trace();
 		this.isPlayer = !!data.isPlayer;
 		this.zIndex   = this.genZ();
+		this.circle   = new Circle(0, 0, 0);
 		this.update(data);
 	},
 	genZ: function () {
@@ -35,7 +38,8 @@ var Unit = atom.Class({
 			this.health = data.health;
 			this.radius = data.radius;
 			this.position.moveTo(data.position);
-			this.libcanvas && this.libcanvas.update();
+			if (this.libcanvas) this.libcanvas.update();
+			this.trace.trace(this.position.x + '.' + this.position.y);
 		}
 	},
 	somethingChanged: function (d) {
@@ -44,12 +48,6 @@ var Unit = atom.Class({
 			!u.angle.equals(d.angle || 0) ||
 			!u.health.equals(d.health) ||
 			!u.position.equals(d.position);
-	},
-	viewPoint: function () {
-		return this.position.clone()
-			.move({ x: 25, y: 0 })
-			.rotate(this.angle, this.position)
-			.snapToPixel();
 	},
 	_healthRect: null,
 	_healthSprite: null,
@@ -95,8 +93,18 @@ var Unit = atom.Class({
 		}
 		return sprite;
 	},
+	viewPoint: function (translated) {
+		return translated.clone()
+			.move({ x: 25, y: 0 })
+			.rotate(this.angle, translated);
+	},
 	draw: function () {
-		var lc = this.libcanvas;
+		var lc  = this.libcanvas;
+		var pos = this.position
+			.clone()
+			.move(this.field.translate)
+			.snapToPixel();
+		
 		if (this.isPlayer && lc.mouse.inCanvas) {
 			lc.ctx.drawImage({
 				image : this.libcanvas.getImage('aim'),
@@ -104,13 +112,15 @@ var Unit = atom.Class({
 			})
 		}
 		var color  = this.isPlayer ? 'green' : 'red';
-		var circle = new Circle(this.position.snapToPixel(), this.radius);
+		var circle = this.circle;
+		circle.center.moveTo(pos);
+		circle.radius = this.radius;
 		lc.ctx
-			.stroke(new Line(this.position.snapToPixel(), this.viewPoint()), color)
+			.stroke(new Line(pos, this.viewPoint(pos)), color)
 			.fill(circle, 'black').stroke(circle, color)
 			.drawImage({
 				image: this.healthSprite,
-				center: this.position.clone().move(this.healthShift)
+				center: pos.move(this.healthShift)
 			});
 	}
 });

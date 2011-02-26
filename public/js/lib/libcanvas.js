@@ -2185,11 +2185,12 @@ LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 		this.height = height;
 		return this;
 	},
-	hasPoint : function (point) {
-		point = Point.from(arguments);
+	hasPoint : function (point, padding) {
+		point   = Point.from(arguments);
+		padding = padding || 0;
 		return point.x != null && point.y != null
-			&& point.x.between(min(this.from.x, this.to.x), max(this.from.x, this.to.x), 1)
-			&& point.y.between(min(this.from.y, this.to.y), max(this.from.y, this.to.y), 1);
+			&& point.x.between(min(this.from.x, this.to.x) + padding, max(this.from.x, this.to.x) - padding, 1)
+			&& point.y.between(min(this.from.y, this.to.y) + padding, max(this.from.y, this.to.y) - padding, 1);
 	},
 	draw : function (ctx, type) {
 		// fixed Opera bug - cant drawing rectangle with width or height below zero
@@ -2672,6 +2673,7 @@ authors:
 
 requires:
 	- LibCanvas
+	- Point
 	- Context2d
 	- Inner.FrameRenderer
 	- Inner.FpsMeter
@@ -2726,12 +2728,12 @@ LibCanvas.Canvas2D = atom.Class({
 		this.createProjectBuffer().addClearer();
 
 		this.update = this.update.context(this);
-
+		
 		this.addEvent('ready', function () {
 			this.update.delay(0)
 		});
 	},
-
+	
 	set: function (props) {
 		for (var i in props) {
 			if (this.origElem != this.elem) {
@@ -3204,8 +3206,16 @@ LibCanvas.Context2D = atom.Class({
 		return this.canvas.height;
 	},
 
+	_fullRect: null,
 	getFullRectangle : function () {
-		return new Rectangle(0, 0, this.width, this.height);
+		var fr = this._fullRect;
+		if(!fr) {
+			this._fullRect = fr = new Rectangle(0, 0, this.width, this.height)
+		} else {
+			if (fr.width  != this.width ) fr.width  = this.width;
+			if (fr.height != this.height) fr.height = this.height;
+		}
+		return fr;
 	},
 	original : function (method, args) {
 		try {
@@ -5210,7 +5220,6 @@ LibCanvas.namespace('Utils').AudioElement = atom.Class({
 		if (gatling) {
 			file = file.replace(/:\d+$/, '');
 			gatling = gatling[1];
-			console.log(gatling)
 		}
 		this.audio.src = file.replace(/\*/g, this.getExtension());
 		this.audio.load();

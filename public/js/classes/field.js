@@ -1,25 +1,39 @@
+
+// todo: разделить на файлы App и Field
 var Field = atom.Class({
+	Implements: [Drawable],
+	
 	initialize: function (options) {
-		this.libcanvas = new LibCanvas(options.element, {
+		new LibCanvas(options.element, {
 			preloadImages: {
 				aim : 'images/aim.png'
 			},
 			preloadAudio: {
-				shot: 'sounds/shot.*:12'
+				shot: 'sounds/shot.*:8'
 			}
-		}).start();
-		this.link      = new Link(options.server).connect();
-
-		this.link.addEvent('connect', this.start.context(this));
-		this.link.addEvent('message', this.message.context(this));
+		})
+		.set(options.screen)
+		.start()
+		.addElement(this);
+		
+		this.translateTrace = new Trace();
+		this.screen = options.screen;
+			
+		this.link = new Link(options.server).connect()
+			.addEvent('connect', this.start.context(this))
+			.addEvent('message', this.message.context(this));
 	},
 
 	start: function () {},
+	
+	get player () {
+		return 'playerId' in this ? this.getUnit(this.playerId) : null;
+	},
 
 	shots: {},
 	units: {},
 	createUnit: function (unit) {
-		unit = new Unit(unit, this);
+		unit = new Unit(this, unit);
 		this.libcanvas.addElement(unit).update();
 		this.units[unit.id] = unit;
 		return unit;
@@ -39,14 +53,48 @@ var Field = atom.Class({
 		if (this.units[id]) {
 			var unit = this.units[id];
 			delete this.units[id];
-			this.libcanvas.rmElement(unit);
+			this.libcanvas.rmElement(unit);ss
 		}
+		return this;
+	},
+	_translate: new Point(0, 0),
+	get translate () {
+		if (!this.player) return new Point(0,0);
+		
+		var pos = this.player.position, tr = this._translate
+		
+		// todo: если игрок не двигается, то классы не должны транслировать объекты
+		if ( !tr.player || !pos.equals(tr.player) ) {
+			if (tr.player) {
+				tr.player.moveTo(pos)
+			} else {
+				tr.player = pos.clone();
+			}
+			tr.moveTo({
+				x: this.screen.width  / 2 - pos.x,
+				y: this.screen.height / 2 - pos.y
+			});
+		}
+		return tr;
+	},
+	draw: function () {
+		if (!this.fieldRect) return;
+		
+		this.libcanvas.ctx.save()
+			.set('lineWidth', 4)
+			.stroke(this.fieldRect.clone().move(this.translate), '#090')
+			.restore();
+	},
+	
+	fieldRect: null,
+	createFieldRect: function (size) {
+		this.fieldRect = new Rectangle({ from: [0, 0], size: size });
 		return this;
 	},
 
 	message: function (data) {
 		if ('player' in data || 'playerId' in this) {
-			for (i in data) {
+			for (var i in data) {
 				if (i in this.actions) {
 					this.actions[i].call(this, data[i])
 				} else {
@@ -56,8 +104,15 @@ var Field = atom.Class({
 		}
 	},
 	actions: {
+		barriers: function (barriers) {
+			for (var i = barriers.length; i--;) {
+				this.libcanvas.addElement(
+					new Barrier(this, barriers[i])
+				);
+			}
+		},
 		screen: function (screen) {
-			this.libcanvas.set(screen);
+			this.createFieldRect(screen);
 		},
 		player: function (player) {
 			this.playerId = player.id;
@@ -75,7 +130,7 @@ var Field = atom.Class({
 		announcement: function (msg) {
 			atom.log('Announcement: «' + msg + '»');
 		},
-		disconnect: function (unit) {
+		disconnected: function (unit) {
 			this.deleteUnit(unit.id);
 		},
 		shots: function (shots) {

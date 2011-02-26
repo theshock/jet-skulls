@@ -7,7 +7,7 @@ var Controls = atom.Class({
 			.listenMouse(),
 		key = lc.getKey.context(lc);
 
-		var shot = false;
+		var shot = false, mouse = lc.mouse.point;
 
 		atom(lc.origElem).bind({
 			mousedown: function () { shot = true; },
@@ -20,7 +20,7 @@ var Controls = atom.Class({
 					x: key(controls.left) ? -1 : key(controls.right) ? 1 : 0,
 					y: key(controls.up)   ? -1 : key(controls.down ) ? 1 : 0
 				},
-				mouse: lc.mouse.inCanvas ? lc.mouse.point.toObject() : null,
+				mouse: lc.mouse.inCanvas ? mouse.clone().move(field.translate, 1).toObject() : null,
 				shot: shot
 			});
 		}.context(this));

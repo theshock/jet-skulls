@@ -8,7 +8,7 @@ GLOBAL.Unit = atom.Class({
 	lastShot  : 0,
 	radius    : 7,
 	health    : 100,
-	weaponReload:200,
+	weaponReload:120,
 	initialize: function (id, field) {
 		this.id         = id;
 		this.lastUpdate = Date.now();
@@ -62,15 +62,22 @@ GLOBAL.Unit = atom.Class({
 		}
 	},
 	isCollisionIn: function (position) {
-		var diameter = this.radius*2;
+		var diameter = this.radius*2, i;
 		if (!this.field.rect.hasPoint(position, this.radius)) return true;
 		
-		for (var i in this.field._units) {
+		for (i = this.field.barriers.length; i--;) {
+			if (this.field.barriers[i].rect.hasPoint(position, -this.radius)) {
+				return true;
+			}
+		}
+		
+		for (i in this.field._units) {
 			var unit = this.field._units[i];
 			if (unit != this && unit.position.distanceTo(position) < diameter) {
 				return true;
 			}
 		}
+		
 		return false;
 	},
 	checkInjured: function (bullet) {

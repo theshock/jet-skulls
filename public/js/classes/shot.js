@@ -7,12 +7,13 @@ var Shot = atom.Class({
 	zIndex: 5,
 
 	initialize: function (field, data) {
-		this.owner    = field.getUnit(data.owner);
-		this.start    = field.getUnit(data.owner).position.clone();
-		this.id       = data.id;
-		this.position = new Point(data.x, data.y);
-		this.radius   = 2;
+		this.field      = field;
+		this.owner      = field.getUnit(data.owner);
+		this.id         = data.id;
+		this.position   = new Point(data.x, data.y);
+		this.radius     = 2;
 		this.rayOpacity = 0.2;
+		this.circle     = new Circle(0,0,this.radius);
 
 		this.addEvent('libcanvasSet', function () {
 			this.animate({
@@ -36,13 +37,18 @@ var Shot = atom.Class({
 	},
 
 	draw: function () {
-		var ctx = this.libcanvas.ctx
-			.fill(new Circle(this.position, this.radius), '#a96');
+		var translate = this.field.translate;
+		var pos       = this.position.clone().move(translate);
+		var circle    = this.circle;
+		circle.center.moveTo(pos);
+		circle.radius = this.radius;
+		
+		var ctx = this.libcanvas.ctx.fill(circle, '#a96');
 			
 		if (this.rayOpacity) {
 			ctx.save()
 			   .set({ globalAlpha: this.rayOpacity })
-			   .stroke(new Line(this.owner.position, this.position), '#fda')
+			   .stroke(new Line(this.owner.position.clone().move(translate), pos), '#fda')
 			   .restore()
 		}
 	}
