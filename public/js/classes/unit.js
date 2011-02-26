@@ -1,6 +1,6 @@
 var Unit = atom.Class({
 	Static: {
-		count: 0
+		count: 16
 	},
 	
 	Implements: [Drawable],
@@ -116,8 +116,11 @@ var Unit = atom.Class({
 		circle.center.moveTo(pos);
 		circle.radius = this.radius;
 		lc.ctx
-			.stroke(new Line(pos, this.viewPoint(pos)), color)
-			.fill(circle, 'black').stroke(circle, color)
+			.drawImage({
+				image : this.libcanvas.getImage(this.isPlayer ? 'player' : 'enemy'),
+				center: pos,
+				angle : this.angle || 0
+			})
 			.drawImage({
 				image: this.healthSprite,
 				center: pos.move(this.healthShift)

@@ -13,7 +13,7 @@ GLOBAL.Field = atom.Class({
 				units: this.units,
 				shots: this.shots
 			});
-		}.periodical(30, this));
+		}.periodical(40, this));
 	},
 
 	_shots : [],

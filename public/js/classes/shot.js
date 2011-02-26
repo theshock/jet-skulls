@@ -43,12 +43,12 @@ var Shot = atom.Class({
 		circle.center.moveTo(pos);
 		circle.radius = this.radius;
 		
-		var ctx = this.libcanvas.ctx.fill(circle, '#a96');
+		var ctx = this.libcanvas.ctx.fill(circle, '#300');
 			
 		if (this.rayOpacity) {
 			ctx.save()
 			   .set({ globalAlpha: this.rayOpacity })
-			   .stroke(new Line(this.owner.position.clone().move(translate), pos), '#fda')
+			   .stroke(new Line(this.owner.position.clone().move(translate), pos), '#300')
 			   .restore()
 		}
 	}

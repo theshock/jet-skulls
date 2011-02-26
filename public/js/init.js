@@ -5,7 +5,7 @@ atom(function () {
 	
 	var field = new Field({
 		element: '#jet',
-		screen : { width: 1200, height: 750 },
+		screen : { width: 800, height: 500 },
 		server : { port: 6660 }
 	});
 

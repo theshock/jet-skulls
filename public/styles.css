@@ -6,4 +6,5 @@ html {
 canvas {
 	border: 1px dashed #040;
 	cursor: none;
+	background: black;
 }

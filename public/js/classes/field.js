@@ -3,10 +3,14 @@
 var Field = atom.Class({
 	Implements: [Drawable],
 	
+	zIndex: 1,
+	
 	initialize: function (options) {
 		new LibCanvas(options.element, {
 			preloadImages: {
-				aim : 'images/aim.png'
+				aim   : 'images/aim.png',
+				player: 'images/man-green.png',
+				enemy : 'images/man-red.png'
 			},
 			preloadAudio: {
 				shot: 'sounds/shot.*:8'
@@ -53,7 +57,7 @@ var Field = atom.Class({
 		if (this.units[id]) {
 			var unit = this.units[id];
 			delete this.units[id];
-			this.libcanvas.rmElement(unit);ss
+			this.libcanvas.rmElement(unit);
 		}
 		return this;
 	},
@@ -77,12 +81,26 @@ var Field = atom.Class({
 		}
 		return tr;
 	},
+	
+	// #todo: optimize by caching
+	get viewPort () {
+		var pos = this.player.position;
+		return new Rectangle({
+			from: {
+				x: pos.x - this.screen.width  / 2,
+				y: pos.y - this.screen.height / 2
+			},
+			size: this.screen
+		})
+	},
 	draw: function () {
 		if (!this.fieldRect) return;
 		
+		var rect = this.fieldRect.clone().move(this.translate);
 		this.libcanvas.ctx.save()
 			.set('lineWidth', 4)
-			.stroke(this.fieldRect.clone().move(this.translate), '#090')
+			.fill(rect, '#938775')
+			.stroke(rect, '#4f3f27')
 			.restore();
 	},
 	
