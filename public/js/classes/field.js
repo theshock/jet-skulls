@@ -84,6 +84,8 @@ var Field = atom.Class({
 	
 	// #todo: optimize by caching
 	get viewPort () {
+		if (!this.player) return new Rect(0,0, this.screen.width, this.screen.height);
+		
 		var pos = this.player.position;
 		return new Rectangle({
 			from: {

@@ -13,10 +13,27 @@ GLOBAL.Unit = atom.Class({
 		this.id         = id;
 		this.lastUpdate = Date.now();
 		this.field      = field;
-		this.position   = new Point(field.randomPoint());
+		this.position   = this.generatePoint();
 	},
 	get speed () {
 		return this._speed - (100 - this.health);
+	},
+	generatePoint: function () {
+		// Возможно, стоит придумать нормальный алгоритм нахождения точки
+		// которая не попадает в какое-то из зданий?
+		// Оставил на всяк случай
+		var limit = 100, bar = this.field.barriers, point = new Point(0,0);
+		var collide = function (point) {
+			for (var i = bar.length; i--;) {
+				if (bar[i].rect.hasPoint(point, -this.radius*2)) return true;
+			}
+			return false;
+		}
+		do {
+			if (!collide(point.moveTo(this.field.randomPoint()))) break;
+		} while (limit--);
+		if (limit <= 0) console.log('Unit.generatePoint: cant generate random point');
+		return point;
 	},
 	update: function (status) {
 		var now  = Date.now();
@@ -81,7 +98,7 @@ GLOBAL.Unit = atom.Class({
 		return false;
 	},
 	checkInjured: function (bullet) {
-		var hit = ((10 - this.position.distanceTo(bullet)) / 2).round();
+		var hit = ((15 - this.position.distanceTo(bullet)) / 2).round();
 		if (hit > 0) this.health -= hit;
 		if (this.health <= 0) {
 			this.health = 0;
