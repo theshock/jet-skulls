@@ -636,23 +636,14 @@ var parent = function(){
 	return previous.apply(this, arguments);
 };
 
-var count = 0, prevCount = 0;
-
-setInterval(function () {
-	console.log(count, (count - prevCount)/2);
-	prevCount = count;
-}, 2000);
-
 var reset = function(object){
-	count++;
-	
 	for (var key in object) if (!accessors(object, key)) {
 		var value = object[key];
 		if (value && typeof value == 'object') {
 			if ('clone' in value) {
 				object[key] = (typeof value.clone == 'function') ?
 					value.clone() : value.clone;
-			} else {
+			} else { // if (typeOf(value) == 'object') {
 				var F = function(){};
 				F[prototype] = value;
 				object[key] = reset(new F);
