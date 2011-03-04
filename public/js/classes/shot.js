@@ -11,9 +11,11 @@ var Shot = atom.Class({
 		this.owner      = field.getUnit(data.owner);
 		this.id         = data.id;
 		this.position   = new Point(data.x, data.y);
-		this.radius     = 2;
+		this.positionTr = this.position.clone();
+		this.positionOw = this.owner.position.clone();
 		this.rayOpacity = 0.2;
-		this.circle     = new Circle(0,0,this.radius);
+		this.circle     = new Circle(this.positionTr, 2);
+		this.line       = new Line(this.positionOw, this.positionTr);
 
 		this.addEvent('libcanvasSet', function () {
 			this.animate({
@@ -35,20 +37,27 @@ var Shot = atom.Class({
 			this.libcanvas.getAudio('shot').playNext();
 		});
 	},
+	
+	get radius () {
+		return this.circle.radius;
+	},
+	
+	set radius (r) {
+		this.circle.radius = r;
+	},
 
 	draw: function () {
 		var translate = this.field.translate;
-		var pos       = this.position.clone().move(translate);
-		var circle    = this.circle;
-		circle.center.moveTo(pos);
-		circle.radius = this.radius;
 		
-		var ctx = this.libcanvas.ctx.fill(circle, '#300');
+		this.positionTr.set(this.position).move(translate);
+		this.positionOw.set(this.owner.position).move(translate)
+		
+		var ctx = this.libcanvas.ctx.fill(this.circle, '#300');
 			
 		if (this.rayOpacity) {
 			ctx.save()
 			   .set({ globalAlpha: this.rayOpacity })
-			   .stroke(new Line(this.owner.position.clone().move(translate), pos), '#300')
+			   .stroke(this.line, '#300')
 			   .restore()
 		}
 	}

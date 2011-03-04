@@ -477,7 +477,7 @@ var TF    = LibCanvas.Inner.TimingFunctions,
 LibCanvas.namespace('Behaviors').Animatable = atom.Class({
 	Implements: [LibCanvas.Invoker.AutoChoose],
 
-	initialize: atom.Class.privateMethod(function (element) {
+	initialize: atom.Class.hiddenMethod(function (element) {
 		this.animate.element = element;
 		this.animate.func    = atom.typeOf(element) == 'function';
 	}),
@@ -796,10 +796,8 @@ var Point = LibCanvas.Point = atom.Class({
 
 		return this.parent(distance, false);
 	},
-	moveTo : function (newCoord, speed) {
-		return speed ?
-			this.animateMoveTo(newCoord, speed) :
-			this.move(this.diff(newCoord));
+	moveTo : function (newCoord) {
+		return this.move(this.diff(newCoord));
 	},
 	angleTo : function (point) {
 		var diff = Point.from(arguments).diff(this);
@@ -847,26 +845,6 @@ var Point = LibCanvas.Point = atom.Class({
 	},
 	getNeighbour : function (dir) {
 		return this.clone().move(shifts[dir]);
-	},
-	movingInterval: 0,
-	animateMoveTo : function (to, speed) {
-		this.movingInterval.stop();
-		this.movingInterval = function () {
-			var move = {}, pixelsPerFn = speed / 20;
-			var diff = this.diff(to);
-			var dist = this.distanceTo(to);
-			if (dist > pixelsPerFn) {
-				move.x = diff.x * (pixelsPerFn / dist);
-				move.y = diff.y * (pixelsPerFn / dist);
-			} else {
-				move.x = diff.x;
-				move.y = diff.y;
-				this.movingInterval.stop();
-				this.fireEvent('stopMove');
-			}
-			this.move(move);
-		}.periodical(20, this);
-		return this;
 	},
 	equals : function (to, accuracy) {
 		to = Point.from(to);
@@ -1010,6 +988,8 @@ provides: Mouse
 */
 
 LibCanvas.Mouse = atom.Class({
+	Implements: [ atom.Class.Events ],
+	
 	initialize : function (libcanvas) {
 		this.inCanvas = false;
 		this.point = new LibCanvas.Point(null, null);
@@ -1021,14 +1001,14 @@ LibCanvas.Mouse = atom.Class({
 
 		this.setEvents();
 	},
-	setCoords : function (x, y) {
-		if (arguments.length == 2) {
-			this.point.moveTo([x, y]);
-			this.inCanvas = true;
-		} else {
-			this.point.moveTo([null, null]);
+	setCoords : function (point) {
+		if (point == null) {
 			this.inCanvas = false;
+		} else {
+			this.point.moveTo(point);
+			this.inCanvas = true;
 		}
+		this.debugUpdate();
 		return this;
 	},
 	getOffset : function (e) {
@@ -1087,36 +1067,42 @@ LibCanvas.Mouse = atom.Class({
 		return e;
 	},
 	setEvents : function () {
-		var mouse = this;
-		atom(this.elem).bind({
-			/* bug in Linux Google Chrome 5.0.356.0 dev
+		var mouse = this, waitEvent = function (event, isOffise) {
+			return function (e) {
+				var wait = mouse.isEventAdded(event);
+				if (isOffise || wait) mouse.getOffset(e);
+				if (isOffise) mouse.events.event(event, e);
+				if (wait) mouse.fireEvent(event, [e]);
+				return !isOffise;
+			};
+		};
+		
+		atom(mouse.elem).bind({
+			/* bug in Linux Google Chrome
 			 * if moving mouse while some text is selected
 			 * mouse becomes disable.
 			 */
-			mousemove : function (e) {
+			click      : waitEvent('click'),
+			dblclick   : waitEvent('dblclick'),
+			contextmenu: waitEvent('contextmenu'),
+			mousedown  : waitEvent('mousedown', true),
+			mouseup    : waitEvent('mouseup'  , true),
+			mousemove: function (e) {
 				var offset = mouse.getOffset(e);
-				mouse.setCoords(offset.x, offset.y);
+				mouse.setCoords(offset);
 				mouse.events.event('mousemove', e);
 				mouse.isOut = false;
 				return false;
 			},
 			mouseout : function (e) {
 				mouse.getOffset(e);
-				mouse.setCoords(/* null */);
+				mouse.setCoords(null);
 				mouse.events.event('mouseout', e);
+				mouse.fireEvent('mouseout', [e]);
 				mouse.isOut = true;
 				return false;
 			},
-			mousedown : function (e) {
-				mouse.getOffset(e);
-				mouse.events.event('mousedown', e);
-				return false;
-			},
-			mouseup : function (e) {
-				mouse.getOffset(e);
-				mouse.events.event('mouseup'  , e);
-				return false;
-			}
+			selectstart: false
 		});
 		return this;
 	},
@@ -1128,9 +1114,18 @@ LibCanvas.Mouse = atom.Class({
 		this.events.unsubscribe(elem);
 		return this;
 	},
-	debug : function () {
-		return !this.inCanvas ? 'NotInCanvas' :
-			this.point.x.round(3) + ':' + this.point.y.round(3);
+	debugTrace: null,
+	debugUpdate: function () {
+		if (this.debugTrace) {
+			this.debugTrace.trace( 'Mouse' +
+				(this.inCanvas ? ': ' + this.point.x.round() + ',' + this.point.y.round() : ' is out of canvas')
+			);
+		}
+	},
+	debug : function (on) {
+		this.debugTrace = on === false ? null : new LibCanvas.Utils.Trace();
+		this.debugUpdate();
+		return this;
 	}
 });
 
@@ -1324,6 +1319,17 @@ provides: Behaviors.Drawable
 ...
 */
 
+new function () {
+	
+var start = function () {
+	this.libcanvas.addElement(this);
+	return 'remove';
+};
+var stop = function () {
+	this.libcanvas.addElement(this);
+	return 'remove';
+};
+
 LibCanvas.namespace('Behaviors').Drawable = atom.Class({
 	Implements: [atom.Class.Events],
 	libcanvasIsReady: false,
@@ -1356,8 +1362,20 @@ LibCanvas.namespace('Behaviors').Drawable = atom.Class({
 		this.zIndex = zIndex;
 		return this;
 	},
+	startDrawing: function () {
+		return this
+		  .removeEvent('libcanvasSet', stop)
+		     .addEvent('libcanvasSet', start);
+	},
+	stopDrawing: function () {
+		return this
+		  .removeEvent('libcanvasSet', start)
+		     .addEvent('libcanvasSet', stop);
+	},
 	draw : atom.Class.abstractMethod
 });
+
+};
 
 /*
 ---
@@ -1505,9 +1523,9 @@ LibCanvas.namespace('Behaviors').Moveable = atom.Class({
 		}).animate({
 			fn        : fn,
 			time      : distance / speed * 1000,
-			onProccess: this.fireEvent.context(this, [['move']]),
-			onAbort   : this.fireEvent.context(this, [['stopMove']]),
-			onFinish  : this.fireEvent.context(this, [['stopMove']])
+			onProccess: this.fireEvent.context(this, ['move']),
+			onAbort   : this.fireEvent.context(this, ['stopMove']),
+			onFinish  : this.fireEvent.context(this, ['stopMove'])
 		});
 
 		return this;
@@ -2103,14 +2121,11 @@ provides: Shapes.Rectangle
 
 new function () {
 
-var Point = LibCanvas.Point,
-	math = Math,
-	min = math.min,
-	max = math.max,
-	isReal = Object.isReal,
-	random = Number.random;
+var Point  = LibCanvas.Point,
+	math   = Math,
+	random = Number.random,
 
-LibCanvas.namespace('Shapes').Rectangle = atom.Class({
+Rectangle = LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 	Extends: LibCanvas.Shape,
 	set : function () {
 		var a = Array.pickFrom(arguments);
@@ -2189,16 +2204,22 @@ LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 		point   = Point.from(arguments);
 		padding = padding || 0;
 		return point.x != null && point.y != null
-			&& point.x.between(min(this.from.x, this.to.x) + padding, max(this.from.x, this.to.x) - padding, 1)
-			&& point.y.between(min(this.from.y, this.to.y) + padding, max(this.from.y, this.to.y) - padding, 1);
+			&& point.x.between(math.min(this.from.x, this.to.x) + padding, math.max(this.from.x, this.to.x) - padding, 1)
+			&& point.y.between(math.min(this.from.y, this.to.y) + padding, math.max(this.from.y, this.to.y) - padding, 1);
+	},
+	moveTo: function (rect) {
+		rect = Rectangle.from(arguments);
+		this.from.moveTo(rect.from);
+		this.  to.moveTo(rect.to);
+		return this;
 	},
 	draw : function (ctx, type) {
 		// fixed Opera bug - cant drawing rectangle with width or height below zero
 		ctx.original(type + 'Rect', [
-			min(this.from.x, this.to.x),
-			min(this.from.y, this.to.y),
-			this.getWidth() .abs(),
-			this.getHeight().abs()
+			math.min(this.from.x, this.to.x),
+			math.min(this.from.y, this.to.y),
+			this.width .abs(),
+			this.height.abs()
 		]);
 		return this;
 	},
@@ -2216,20 +2237,20 @@ LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 	getRandomPoint : function (margin) {
 		margin = margin || 0;
 		return new Point(
-			random(margin, this.getWidth()  - margin),
-			random(margin, this.getHeight() - margin)
+			random(margin, this.width  - margin),
+			random(margin, this.height - margin)
 		);
 	},
 	translate : function (point, fromRect) {
 		var diff = fromRect.from.diff(point);
 		return new Point({
-			x : (diff.x / fromRect.getWidth() ) * this.getWidth(),
-			y : (diff.y / fromRect.getHeight()) * this.getHeight()
+			x : (diff.x / fromRect.width ) * this.width,
+			y : (diff.y / fromRect.height) * this.height
 		});
 	}
 });
 
-}();
+};
 
 /*
 ---
@@ -2456,6 +2477,8 @@ requires:
 	- Point
 	- Shapes.Rectangle
 	- Shapes.Polygon
+	- Shapes.Polygon
+	- Behaviors.Animatable
 
 provides: Utils.ProgressBar
 
@@ -2470,8 +2493,9 @@ var Buffer    = LibCanvas.Buffer,
 	Point     = LibCanvas.Point;
 
 LibCanvas.namespace('Utils').ProgressBar = atom.Class({
+	Implements: [LibCanvas.Behaviors.Animatable],
 	initialize : function () {
-		this.coord = new Point;
+		this.coord = new Point(0,0);
 		this.progress = 0;
 	},
 	preRender : function () {
@@ -2510,16 +2534,18 @@ LibCanvas.namespace('Utils').ProgressBar = atom.Class({
 	drawLine : function () {
 		if (this.progress > 0) {
 			var line = this.line;
-			var width  = line.width  - 2;
-			var height = line.height - 2;
 			var prog   = this.progress;
-			var c = this.coord;
+			var width  = ((line.width  - 2) * prog).round();
+			if (width) {
+				var height = line.height - 2;
+				var c = this.coord;
 
-			this.libcanvas.ctx.drawImage({
-				image : line,
-				crop  : [0, 0 , width * prog, height],
-				draw  : [c.x+1, c.y+1, width * prog, height]
-			});
+				this.libcanvas.ctx.drawImage({
+					image : line,
+					crop  : [0, 0 , width, height],
+					draw  : [c.x+1, c.y+1, width, height]
+				});
+			}
 		}
 		return this;
 	},
@@ -2560,7 +2586,12 @@ LibCanvas.namespace('Utils').ProgressBar = atom.Class({
 		return b.restore().canvas;
 	},
 	setProgress : function (progress) {
-		this.update().progress = progress;
+		this.update().animate({
+			props: {progress: progress},
+			fn: 'circ-in',
+			onProccess: this.update.context(this),
+			time: 200
+		});
 		return this;
 	},
 	setStyle : function (newStyle) {
@@ -2673,7 +2704,6 @@ authors:
 
 requires:
 	- LibCanvas
-	- Point
 	- Context2d
 	- Inner.FrameRenderer
 	- Inner.FpsMeter
@@ -2694,6 +2724,22 @@ LibCanvas.Canvas2D = atom.Class({
 		atom.Class.Options
 	],
 
+	Generators: {
+		mouse: function () {
+			throw new Error('Mouse is not listened by libcanvas');
+		},
+		keyboard: function () {
+			throw new Error('Keyboard is not listened by libcanvas');
+		},
+		invoker: function () {
+			return new LibCanvas.Invoker({
+				context: this,
+				defaultPriority: 10,
+				fpsLimit: this.options.fps
+			});
+		}
+	},
+
 	options: {
 		clear: true,
 		backBuffer: 'on',
@@ -2708,12 +2754,8 @@ LibCanvas.Canvas2D = atom.Class({
 		return this.options.fps;
 	},
 	// @deprecated
-	set autoUpdate (value) {
-		this.options.autoUpdate = value;
-	},
-	get autoUpdate () {
-		return this.options.autoUpdate;
-	},
+	set autoUpdate (value) { },
+	get autoUpdate () { return true; },
 	interval   : null,
 
 	initialize : function (elem, options) {
@@ -2728,12 +2770,12 @@ LibCanvas.Canvas2D = atom.Class({
 		this.createProjectBuffer().addClearer();
 
 		this.update = this.update.context(this);
-		
+
 		this.addEvent('ready', function () {
 			this.update.delay(0)
 		});
 	},
-	
+
 	set: function (props) {
 		for (var i in props) {
 			if (this.origElem != this.elem) {
@@ -2772,21 +2814,10 @@ LibCanvas.Canvas2D = atom.Class({
 		this.updateFrame = true;
 		return this;
 	},
-
-	_mouse : null,
-	get mouse () {
-		if (this._mouse == null) throw new Error('Mouse is not listened by libcanvas');
-		return this._mouse;
-	},
 	listenMouse : function (elem) {
 		this._mouse = LibCanvas.isLibCanvas(elem) ? elem.mouse
 			: new LibCanvas.Mouse(this, /* preventDefault */elem);
 		return this;
-	},
-	_keyboard : null,
-	get keyboard () {
-		if (this._keyboard == null) throw new Error('Keyboard is not listened by libcanvas');
-		return this._keyboard;
 	},
 	getKey : function (key) {
 		return this.keyboard.keyState(key);
@@ -2802,8 +2833,8 @@ LibCanvas.Canvas2D = atom.Class({
 				Array.collect(this.origElem, ['width', 'height'])
 		);
 	},
-	createShaper : function (config) {
-		var shaper = new LibCanvas.Ui.Shaper(this, config);
+	createShaper : function (options) {
+		var shaper = new LibCanvas.Ui.Shaper(this, options);
 		this.addElement(shaper);
 		return shaper;
 	},
@@ -2822,7 +2853,8 @@ LibCanvas.Canvas2D = atom.Class({
 	// Element : add, rm
 	elems : [],
 	addElement : function (elem) {
-		this.elems.include(elem.setLibcanvas(this));
+		this.elems.include(elem);
+		elem.setLibcanvas(this)
 		return this;
 	},
 	rmElement : function (elem) {
@@ -2831,18 +2863,6 @@ LibCanvas.Canvas2D = atom.Class({
 	},
 
 	// Each frame funcs
-	_invoker: null,
-	get invoker () {
-		if (this._invoker == null) {
-			this._invoker = new LibCanvas.Invoker({
-				context: this,
-				defaultPriority: 10,
-				fpsLimit: this.options.fps
-			});
-		}
-		return this._invoker;
-	},
-
 
 	funcs : {
 		plain : [],
@@ -3800,6 +3820,7 @@ var Keyboard = LibCanvas.Keyboard = atom.Class({
 			}
 			var prevent = this.prevent(key);
 			if (prevent) e.preventDefault();
+			this.debugUpdate();
 			return !prevent;
 		}.context(this);
 	},
@@ -3809,6 +3830,22 @@ var Keyboard = LibCanvas.Keyboard = atom.Class({
 	},
 	keyState : function (keyName) {
 		return this.self.keyState(keyName);
+	},
+	debugTrace: null,
+	debugUpdate: function () {
+		if (this.debugTrace) {
+			var keys = '', states = this.self.keyStates;
+			for (var key in states) if (states[key]) {
+				keys += '\n = ' + key;
+			}
+			this.debugTrace.trace( 'Keyboard:' + keys );
+		}
+		return this;
+	},
+	debug : function (on) {
+		this.debugTrace = on === false ? null : new LibCanvas.Utils.Trace();
+		this.debugUpdate();
+		return this;
 	}
 });
 
@@ -4747,7 +4784,10 @@ new function () {
 var Point = LibCanvas.Point,
 	math = Math,
 	max = math.max,
-	min = math.min;
+	min = math.min,
+	between = function (x, a, b) {
+		return x === a || x === b || (a < x && x < b) || (b < x && x < a);
+	};
 
 
 LibCanvas.namespace('Shapes').Line = atom.Class({
@@ -4775,6 +4815,35 @@ LibCanvas.namespace('Shapes').Line = atom.Class({
 		// if triangle square is zero - points are on one line
 		return ((fx-px)*(ty-py)-(tx-px)*(fy-py)).round(6) == 0;
 	},
+	intersect: function (line, point) {
+		line = this.self.from(line);
+		var a = this.from, b = this.to, c = line.from, d = line.to, x, y, FALSE = point ? null : false;
+		if (d.x == c.x) { // DC == vertical line
+			if (b.x == a.x) {
+				if (a.x == d.x) {
+					if (a.y.between(c.y, d.y)) {
+						return a.clone();
+					} else if (b.y.between(c.y, d.y)) {
+						return b.clone();
+					} else {
+						return FALSE;
+					}
+				} else {
+					return FALSE;
+				}
+			}
+			x = d.x;
+			y = b.y + (x-b.x)*(a.y-b.y)/(a.x-b.x);
+		} else {
+			x = ((a.x*b.y - b.x*a.y)*(d.x-c.x)-(c.x*d.y - d.x*c.y)*(b.x-a.x))/((a.y-b.y)*(d.x-c.x)-(c.y-d.y)*(b.x-a.x));
+			y = ((c.y-d.y)*x-(c.x*d.y-d.x*c.y))/(d.x-c.x);
+			x *= -1;
+		}
+		
+		return between(x, a.x, b.x) && between (y, a.y, b.y) &&
+		       between(x, c.x, d.x) && between (y, c.y, d.y) ?
+		            (point ? new Point(x, y) : true) : FALSE;
+	},
 	get length () {
 		return this.to.distanceTo(this.from);
 	},
@@ -4789,7 +4858,7 @@ LibCanvas.namespace('Shapes').Line = atom.Class({
 	}
 });
 
-}();
+};
 
 
 /*

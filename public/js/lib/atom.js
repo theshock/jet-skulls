@@ -90,6 +90,9 @@ provides: atom
 			key = to;
 			to  = null;
 		}
+		
+		// #todo: implement with getOwnPropertyDescriptor && defineProperty
+		
 		var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key);
 
 		if ( g || s ) {
@@ -260,6 +263,10 @@ new function () {
 				r[args[0]] = args[1];
 				return r;
 			}
+		},
+		prevent = function (e) {
+			e.preventDefault();
+			return false;
 		};
 
 	atom.extend({
@@ -358,7 +365,8 @@ new function () {
 			return this.each(function (elem) {
 				for (var i in events) {
 					if (elem == doc && i == 'load') elem = win;
-					elem.addEventListener(i, events[i].bind(this), false);
+					var fn = events[i] === false ? prevent : events[i].bind(this);
+					elem.addEventListener(i, fn, false);
 				}
 			}.bind(this));
 		},
@@ -512,6 +520,55 @@ atom.implement({
 /*
 ---
 
+name: "Uri"
+
+description: "Port of parseUri function"
+
+license: "MIT License"
+
+author: "Steven Levithan <stevenlevithan.com>"
+
+requires:
+	- atom
+
+provides: uri
+
+...
+*/
+atom.extend({
+	uri: atom.extend(function (str) {
+		var	o   = atom.uri.options,
+			m   = o.parser[o.strictMode ? "strict" : "loose"].exec(str || window.location.href),
+			uri = {},
+			i   = 14;
+
+		while (i--) uri[o.key[i]] = m[i] || "";
+
+		uri[o.q.name] = {};
+		uri[o.key[12]].replace(o.q.parser, function ($0, $1, $2) {
+			if ($1) uri[o.q.name][$1] = $2;
+		});
+
+		return uri;
+	}, {
+		options: {
+			strictMode: false,
+			key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
+			q:   {
+				name:   "queryKey",
+				parser: /(?:^|&)([^&=]*)=?([^&]*)/g
+			},
+			parser: {
+				strict: /^(?:([^:\/?#]+):)?(?:\/\/((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?))?((((?:[^?#\/]*\/)*)([^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
+				loose:  /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/)?((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/
+			}
+		}
+	})
+});
+
+/*
+---
+
 name: "Class"
 
 description: "Contains the Class Function for easily creating, extending, and implementing reusable Classes."
@@ -579,14 +636,23 @@ var parent = function(){
 	return previous.apply(this, arguments);
 };
 
+var count = 0, prevCount = 0;
+
+setInterval(function () {
+	console.log(count, (count - prevCount)/2);
+	prevCount = count;
+}, 2000);
+
 var reset = function(object){
+	count++;
+	
 	for (var key in object) if (!accessors(object, key)) {
 		var value = object[key];
 		if (value && typeof value == 'object') {
 			if ('clone' in value) {
 				object[key] = (typeof value.clone == 'function') ?
 					value.clone() : value.clone;
-			} else { // if (typeOf(value) == 'object') {
+			} else {
 				var F = function(){};
 				F[prototype] = value;
 				object[key] = reset(new F);
@@ -711,7 +777,7 @@ extend(Class, {
 	protectedMethod: function (fn) {
 		return extend(fn, { $protected: true });
 	},
-	privateMethod: function (fn) {
+	hiddenMethod: function (fn) {
 		return extend(fn, { $hidden: 'next' });
 	}
 });
@@ -776,7 +842,7 @@ nextTick.reset();
 
 atom.extend(Class, {
 	Events: Class({
-		events: { $ready: {} },
+		_events: { $ready: {} },
 
 		addEvent: function(name, fn) {
 			var i, l, onfinish = [];
@@ -795,11 +861,11 @@ atom.extend(Class, {
 				} else if (!fn) {
 					throw new TypeError('Function is empty');
 				} else {
-					Object.ifEmpty(this.events, name, []);
+					Object.ifEmpty(this._events, name, []);
 
-					this.events[name].include(fn);
+					this._events[name].include(fn);
 
-					var ready = this.events.$ready[name];
+					var ready = this._events.$ready[name];
 					if (ready) fire.apply(this, [name, fn, ready, onfinish]);
 					onfinish.invoke();
 				}
@@ -822,17 +888,20 @@ atom.extend(Class, {
 					throw new TypeError('Event name «$ready» is reserved');
 				}
 				if (arguments.length == 1) {
-					this.events[name] = [];
-				} else if (name in this.events) {
-					this.events[name].erase(fn);
+					this._events[name] = [];
+				} else if (name in this._events) {
+					this._events[name].erase(fn);
 				}
 			}
 			return this;
 		},
-
+		isEventAdded: function (name) {
+			var e = this._events[name];
+			return !!(e && e.length);
+		},
 		fireEvent: function (name, args) {
 			name = removeOn(name);
-			var funcs = this.events[name];
+			var funcs = this._events[name];
 			if (funcs) {
 				var onfinish = [],
 					l = funcs.length,
@@ -845,7 +914,7 @@ atom.extend(Class, {
 		readyEvent: function (name, args) {
 			nextTick(function () {
 				name = removeOn(name);
-				this.events.$ready[name] = args || [];
+				this._events.$ready[name] = args || [];
 				this.fireEvent(name, args || []);
 			}.context(this));
 			return this;
@@ -888,55 +957,6 @@ atom.extend(atom.Class, {
 				}
 			}
 			return this;
-		}
-	})
-});
-
-/*
----
-
-name: "Uri"
-
-description: "Port of parseUri function"
-
-license: "MIT License"
-
-author: "Steven Levithan <stevenlevithan.com>"
-
-requires:
-	- atom
-
-provides: uri
-
-...
-*/
-atom.extend({
-	uri: atom.extend(function (str) {
-		var	o   = atom.uri.options,
-			m   = o.parser[o.strictMode ? "strict" : "loose"].exec(str || window.location.href),
-			uri = {},
-			i   = 14;
-
-		while (i--) uri[o.key[i]] = m[i] || "";
-
-		uri[o.q.name] = {};
-		uri[o.key[12]].replace(o.q.parser, function ($0, $1, $2) {
-			if ($1) uri[o.q.name][$1] = $2;
-		});
-
-		return uri;
-	}, {
-		options: {
-			strictMode: false,
-			key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
-			q:   {
-				name:   "queryKey",
-				parser: /(?:^|&)([^&=]*)=?([^&]*)/g
-			},
-			parser: {
-				strict: /^(?:([^:\/?#]+):)?(?:\/\/((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?))?((((?:[^?#\/]*\/)*)([^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
-				loose:  /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/)?((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/
-			}
 		}
 	})
 });
@@ -1382,7 +1402,7 @@ atom.implement(String, 'safe', {
 		return new Array(times + 1).join(this);
 	},
 	substitute: function(object, regexp){
-		return this.replace(regexp || (substituteRE), function(match, name){
+		return this.replace(regexp || substituteRE, function(match, name){
 			return (match[0] == '\\') ? match.slice(1) : (object[name] || '');
 		});
 	},
@@ -1410,4 +1430,40 @@ atom.implement(String, 'safe', {
 
 }();
 
+
+/*
+---
+
+name: "Class.Mutators.Generators"
+
+description: "Provides Generators mutator"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- atom
+	- Class
+
+provides: Class.Mutators.Generators
+
+...
+*/
+
+new function () {
+
+var getter = function (key, fn) {
+	return function() {
+		var pr = '_' + key, obj = this;
+		return pr in obj ? obj[pr] : (obj[pr] = fn.call(obj));
+	};
+};
+
+atom.Class.Mutators.Generators = function(properties) {
+	for (var i in properties) this.prototype.__defineGetter__(i, getter(i, properties[i]));
+};
+
+};
  

@@ -7,7 +7,7 @@ var Unit = atom.Class({
 
 	zIndex: 16,
 	
-	healthShift: {x: 0, y: 15},
+	healthShift: new Point(0, 15),
 	healthRectWidth: 30,
 	healthRectHeight: 4,
 
@@ -18,7 +18,7 @@ var Unit = atom.Class({
 		this.trace    = new Trace();
 		this.isPlayer = !!data.isPlayer;
 		this.zIndex   = this.genZ();
-		this.circle   = new Circle(0, 0, 0);
+		this.positionTr = new Point(0,0);
 		this.update(data);
 	},
 	genZ: function () {
@@ -100,10 +100,9 @@ var Unit = atom.Class({
 	},
 	draw: function () {
 		var lc  = this.libcanvas;
-		var pos = this.position
-			.clone()
-			.move(this.field.translate)
-			.snapToPixel();
+		var pos = this.positionTr
+			.moveTo(this.position)
+			.move(this.field.translate);
 		
 		if (this.isPlayer && lc.mouse.inCanvas) {
 			lc.ctx.drawImage({
@@ -112,9 +111,6 @@ var Unit = atom.Class({
 			})
 		}
 		var color  = this.isPlayer ? 'green' : 'red';
-		var circle = this.circle;
-		circle.center.moveTo(pos);
-		circle.radius = this.radius;
 		lc.ctx
 			.drawImage({
 				image : this.libcanvas.getImage(this.isPlayer ? 'player' : 'enemy'),
