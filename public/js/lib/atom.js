@@ -76,11 +76,14 @@ provides: atom
 		} else if (item.callee && typeof item.length == 'number'){
 			return 'arguments';
 		}
-		return typeof item;
+		
+		var t = typeof item;
+		
+		return (t == 'object' && atom.Class && item instanceof atom.Class) ? 'class' : t;
 	};
 	typeOf.textnodeRE = /\S/;
 	typeOf.types = {};
-	['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp'].forEach(function(name) {
+	['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Class'].forEach(function(name) {
 		typeOf.types['[object ' + name + ']'] = name.toLowerCase();
 	});
 
@@ -248,6 +251,7 @@ new function () {
 		classNameRE = /^\.[-_a-z0-9]+$/i,
 		idRE = /^#[-_a-z0-9]+$/i,
 		toArray = atom.toArray,
+		isArray = Array.isArray,
 		length = 'length',
 		getElement = 'getElement',
 		getElementById = getElement + 'ById',
@@ -286,7 +290,7 @@ new function () {
 			this.elems = (sel instanceof HTMLCollection) ? toArray(sel)
 				: (typeof sel == 'string') ? atom.findByString(context, sel)
 				: (atom.isAtom(sel))       ? sel.elems
-				: (Array.isArray(sel))     ? sel
+				: (isArray(sel))     ? sel
 				:      atom.find(context, sel);
 			return this;
 		},
@@ -321,12 +325,15 @@ new function () {
 		get body() {
 			return this.find('body');
 		},
+		get first() {
+			return this.elems[0];
+		},
 		html : function (value) {
 			if (arguments.length) {
-				this.get().innerHTML = value;
+				this.first.innerHTML = value;
 				return this;
 			} else {
-				return this.get().innerHTML;
+				return this.first.innerHTML;
 			}
 		},
 		create : function (tagName, index, attr) {
@@ -345,30 +352,30 @@ new function () {
 		attr : function (attr) {
 			attr = setter(arguments);
 			if (typeof attr[0] == 'string') {
-				return this.get().getAttribute(attr[0]);
+				return this.first.getAttribute(attr[0]);
 			}
 			return this.each(function (elem) {
-				atom.extend(elem, attr);
+				for (var i in attr) elem.setAttribute(i, attr[i]);
 			});
 		},
 		css : function (css) {
 			css = setter(arguments);
 			if (typeof css[0] == 'string') {
-				return this.get().style[css[0]];
+				return this.first.style[css[0]];
 			}
 			return this.each(function (elem) {
 				atom.extend(elem.style, css);
 			});
 		},
 		bind : function () {
-			var events = setter(arguments);
+			var events = setter(arguments), bind = this;
 			return this.each(function (elem) {
 				for (var i in events) {
 					if (elem == doc && i == 'load') elem = win;
-					var fn = events[i] === false ? prevent : events[i].bind(this);
+					var fn = events[i] === false ? prevent : events[i].bind(bind);
 					elem.addEventListener(i, fn, false);
 				}
-			}.bind(this));
+			});
 		},
 		// todo: unbind
 		delegate : function (tagName, event, fn) {
@@ -377,6 +384,13 @@ new function () {
 					fn.apply(this, arguments);
 				}
 			});
+		},
+		wrap : function (wrapper) {
+			wrapper = atom(wrapper).first;
+			var obj = this.first;
+			obj.parentNode.replaceChild(wrapper, obj);
+			wrapper[appendChild](obj);
+			return this;
 		},
 		ready : function (full, fn) {
 			if (arguments[length] == 1) {
@@ -400,8 +414,35 @@ new function () {
 			this.each(function (elem) {
 				fr[appendChild](elem);
 			});
-			atom(to).get()[appendChild](fr);
+			atom(to).first[appendChild](fr);
 			return this;
+		},
+		addClass: function (classNames) {
+			if (!classNames) return this;
+			
+			if (!isArray(classNames)) classNames = [classNames];
+			
+			return this.each(function (elem) {
+				var property = elem.className, current = ' ' + property + ' ';
+				
+				for (var i = classNames.length; i--;) {
+					var c = ' ' + classNames[i];
+					if (current.indexOf(c + ' ') < 0) property += c;
+				}
+				
+				elem.className = property.trim();
+			});
+		},
+		removeClass: function (classNames) {
+			if (!isArray(classNames) && classNames) classNames = [classNames];
+			
+			return this.each(function (elem) {
+				var current = ' ' + elem.className + ' ';
+				for (var i = classNames.length; i--;) {
+					current = current.replace(' ' + classNames[i] + ' ', ' ');
+				}
+				elem.className = current.trim();
+			});
 		},
 		log : function () {
 			atom.log.apply(atom, arguments[length] ? arguments : ['atom', this.elems]);
@@ -592,7 +633,8 @@ provides: Class
 var typeOf = atom.typeOf,
 	extend = atom.extend,
 	accessors = atom.implementAccessors,
-	prototype = 'prototype';
+	prototype = 'prototype',
+	lambda    = function (value) { return function () { return value; }};
 
 var Class = function (params) {
 	if (Class.$prototyping) {
@@ -670,8 +712,6 @@ var wrap = function(self, key, method){
 	
 	return wrapper;
 };
-
-var lambda = function (value) { return function () { return value; }};
 
 extend(Class, {
 	extend: function (name, fn) {
@@ -1402,8 +1442,9 @@ atom.implement(String, 'safe', {
 		if (type == 'regexp') {
 			return this.replace(find, function (symb) { return replace[symb]; });
 		} else if (type == 'object') {
-			for (var i in find) this.replaceAll(i, find[i]);
-			return this;
+			var result = this
+			for (var i in find) result = result.replaceAll(i, find[i]);
+			return result;
 		}
 		return this.split(find).join(replace);
 	},

@@ -199,7 +199,8 @@ LibCanvas.Invoker = atom.Class({
 	rmFunction: function (fn) {
 		this.funcs.erase(fn);
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Invoker]')
 });
 
 LibCanvas.Invoker.AutoChoose = atom.Class({
@@ -439,6 +440,9 @@ LibCanvas.namespace('Utils').Color = atom.Class({
 		clone.b += math.round(array[2]);
 		return clone;
 	},
+	dump: function () {
+		return '[Color(' + this + ')]';
+	},
 	clone: function () {
 		return new this.self(this.r, this.g, this.b);
 	}
@@ -630,7 +634,8 @@ LibCanvas.Geometry = atom.Class({
 	move : function (distance, reverse) {
 		this.fireEvent('move', [this.invertDirection(distance, reverse)]);
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Geometry]')
 });
 
 /*
@@ -857,13 +862,18 @@ var Point = LibCanvas.Point = atom.Class({
 			y: this.y
 		};
 	},
-	snapToPixel: function (minus) {
-		var shift = minus ? -0.5 : 0.5;
-		return this.clone().move({ x: shift, y: shift });
+	snapToPixel: function () {
+		this.x += 1 - (this.x - this.x.floor()) - 0.5;
+		this.y += 1 - (this.y - this.y.floor()) - 0.5;
+		return this;
 	},
 	clone : function () {
 		return new Point(this);
-	}
+	},
+	dump: function () {
+		return '[Point(' + this.x + ', ' + this.y + ')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Point]')
 });
 
 };
@@ -913,11 +923,23 @@ LibCanvas.namespace('Inner').MouseEvents = atom.Class({
 			over : [],
 			out  : []
 		};
-		var maxOverMouseZ = 0, sub = this.subscribers.sortBy('getZIndex');
+		var maxOverMouseLCZ = 0, maxOverMouseZ = 0, sub = this.subscribers;
+		sub.sort(function ($0, $1) {
+			var diff = $1.libcanvas.zIndex - $0.libcanvas.zIndex;
+			if (diff) return diff < 0 ? -1 : 1;
+			diff = $1.getZIndex() - $0.getZIndex();
+			return diff ? (diff < 0 ? -1 : 1) : 0;
+		});
+		
+		
 		for (var i = 0, l = sub.length; i < l; i++) {
 			var elem = sub[i];
-			if (elem.getZIndex() >= maxOverMouseZ && this.overElem(elem)) {
-				maxOverMouseZ = elem.getZIndex();
+			
+			if (elem.getZIndex() >= maxOverMouseZ
+			 && elem.libcanvas.zIndex >= maxOverMouseLCZ
+			 && this.overElem(elem)) {
+				maxOverMouseZ   = elem.getZIndex();
+				maxOverMouseLCZ = elem.libcanvas.zIndex;
 				elements.over.push(elem);
 			} else {
 				elements.out.push(elem);
@@ -995,7 +1017,7 @@ LibCanvas.Mouse = atom.Class({
 		this.point = new LibCanvas.Point(null, null);
 
 		this.libcanvas = libcanvas;
-		this.elem      = libcanvas.origElem;
+		this.elem      = libcanvas.wrapper;
 
 		this.events = new LibCanvas.Inner.MouseEvents(this);
 
@@ -1126,7 +1148,12 @@ LibCanvas.Mouse = atom.Class({
 		this.debugTrace = on === false ? null : new LibCanvas.Utils.Trace();
 		this.debugUpdate();
 		return this;
-	}
+	},
+	dump: function () {
+		var p = this.point;
+		return '[Mouse(' + p.x + '*' + p.y + ')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Mouse]')
 });
 
 /*
@@ -1334,12 +1361,17 @@ LibCanvas.namespace('Behaviors').Drawable = atom.Class({
 	Implements: [atom.Class.Events],
 	libcanvasIsReady: false,
 	setLibcanvas : function (libcanvas) {
-		this.libcanvas = libcanvas;
-		this.addEvent('libcanvasReady', function () {
-			this.libcanvasIsReady = true;
-		})
-		this.readyEvent('libcanvasSet');
-		this.libcanvas.addEvent('ready', this.readyEvent.context(this, ['libcanvasReady']));
+		if (this.libcanvas) {
+			this.libcanvas.rmElement(this)
+			this.libcanvas = libcanvas;
+		} else {
+			this.libcanvas = libcanvas;
+			this.addEvent('libcanvasReady', function () {
+				this.libcanvasIsReady = true;
+			})
+			this.readyEvent('libcanvasSet');
+			this.libcanvas.addEvent('ready', this.readyEvent.context(this, ['libcanvasReady']));
+		}
 		return this;
 	},
 	isReady : function () {
@@ -1360,6 +1392,11 @@ LibCanvas.namespace('Behaviors').Drawable = atom.Class({
 	},
 	setZIndex : function (zIndex) {
 		this.zIndex = zIndex;
+		return this;
+	},
+	toLayer: function (name) {
+		this.libcanvas.layer(name)
+			.addElement(this);
 		return this;
 	},
 	startDrawing: function () {
@@ -1680,7 +1717,8 @@ LibCanvas.Animation = atom.Class({
 		return index in this.current.cfg ?
 			this.current.cfg[index] :
 			this.current.animation[index];
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Animation]')
 });
 
 
@@ -1708,7 +1746,7 @@ new function () {
 
 var Trace = LibCanvas.namespace('Utils').Trace = atom.Class({
 	initialize : function (object) {
-		if (arguments.length == 1) this.trace(object);
+		if (arguments.length) this.trace(object);
 		this.stopped = false;
 		return this;
 	},
@@ -1716,58 +1754,56 @@ var Trace = LibCanvas.namespace('Utils').Trace = atom.Class({
 		this.stopped = true;
 		return this;
 	},
-	trace : function (object) {
-		if (this.stopped) return false;
-		if (!this.blocked) {
-			this.createNode().html(
-				this.dump(object)
-					.safeHtml()
-					.replaceAll({
-						'\t': '&nbsp;'.repeat(3),
-						'\n': '<br />'
-					})
-				|| 'null'
-			);
+	set value (value) {
+		if (!this.stopped && !this.blocked) {
+			var html = this.dump(value)
+				.replaceAll({
+					'\t': '&nbsp;'.repeat(3),
+					'\n': '<br />'
+				});
+			this.createNode().html(html);
 		}
+	},
+	trace : function (value) {
+		this.value = value;
 		return this;
 	},
 	dumpRec : function (obj, level) {
-		var callee = arguments.callee;
-		var html = '', type = atom.typeOf(obj);
-		if (level > 5) return '*TOO_DEEP : ' + level + '*';
-		var tabs = '\t'.repeat(level);
-		if (Array.isArray(obj)) {
-			html += tabs + '[\n';
-			obj.forEach(function (key) {
-				html += tabs + '\t' + key + ': ' + callee(this, 1+(1*level)) + '\n';
-			});
-			html += tabs + ']\n';
-		} else if (type == 'element') {
-			var attr = [], meth = [];
-			for (var i in obj) (typeof(obj[i]) == 'function') ?
-				meth.push(i + '()') : attr.push(i);
-			html += obj.toString() + ' {\n';
-			if (obj.tagName == 'IMG') try {
-				html += tabs + '\tsrc        : ' + obj.src + '\n';
-				html += tabs + '\tsize       : ' + obj.width + '×' + obj.height + '\n';
-			} catch (ignored) {}
-			html += tabs + '\tattributes : ' + meth.join(', ') + '\n';
-			html += tabs + '\tmethods    : ' + attr.join(', ') + '\n';
-			html += tabs + '}\n'
-		} else if (type == 'object') {
-			html += '{\n';
-			for (var key in obj) {
-				html += tabs + '\t' + key + ': ' + callee(obj[key], 1+(1*level)) + '\n';
-			}
-			html += tabs + '}';
-		} else if (type == 'null') {
-			html += 'null';
-		} else if (type === 'boolean') {
-			html += obj ? 'true' : 'false';
-		} else {
-			html += obj;
+		level  = parseInt(level) || 0
+			
+		if (level > 5) return '*TOO_DEEP*';
+		
+		if (typeof obj == 'object' && typeof(obj.dump) == 'function') return obj.dump();
+		
+		var subDump = function (elem, index) {
+				return tabs + '\t' + index + ': ' + this.dumpRec(elem, level+1) + '\n';
+			}.context(this),
+		    type = atom.typeOf(obj),
+		    tabs = '\t'.repeat(level);
+		
+		switch (type) {
+			case 'array':
+				return '[\n' + obj.map(subDump).join('') + tabs + ']';
+				break;
+			case 'object':
+				var html = '';
+				for (var index in obj) html += subDump(obj[index], index);
+				return '{\n' + html + tabs + '}';
+			case 'element':
+				var prop = (obj.width && obj.height) ? '('+obj.width+'×'+obj.height+')' : '';
+				return '[DOM ' + obj.tagName.toLowerCase() + prop + ']';
+			case 'textnode':
+			case 'whitespace':
+				return '[DOM ' + type + ']';
+			case 'null':
+				return 'null';
+			case 'boolean':
+				return obj ? 'true' : 'false';
+			case 'string':
+				return ('"' + obj + '"').safeHtml();
+			default:
+				return ('' + obj).safeHtml();
 		}
-		return html;
 	},
 	dump : function (object) {
 		return (this.dumpRec(object, 0));
@@ -1780,47 +1816,37 @@ var Trace = LibCanvas.namespace('Utils').Trace = atom.Class({
 					'position' : 'absolute',
 					'top'      : '3px',
 					'right'    : '6px',
-					'maxWidth' : "70%"
+					'maxWidth' : '70%'
 				})
 				.appendTo('body');
 	},
 	events : function (remove) {
 		var trace = this;
-		if (remove) {
-			return this.node;
-			this.node
-				.unbind('onmouseover')
-				.unbind('onmouseout')
-				.unbind('onmousedown')
-				.unbind('onmouseup');
-		} else {
-			this.node.bind({
-				mouseover : function () {
-					this.css('background', '#222');
-				},
-				mouseout  : function () {
-					this.css('background', '#000');
-				},
-				mousedown : function () {
-					trace.blocked = true;
-				},
-				mouseup : function () {
-					trace.blocked = false;
-				}
-			});
-		}
+		// add events unbind
+		!remove || this.node.bind({
+			mouseover : function () {
+				this.css('background', '#222');
+			},
+			mouseout  : function () {
+				this.css('background', '#000');
+			},
+			mousedown : function () {
+				trace.blocked = true;
+			},
+			mouseup : function () {
+				trace.blocked = false;
+			}
+		});
 		return this.node;
 	},
 	destroy : function () {
-		var trace = this;
-		this.events(true);
 		this.node.css('background', '#300');
-		this.timeout = setTimeout (function () {
-			if (trace.node) {
-				trace.node.destroy();
-				trace.node = null;
+		this.timeout = (function () {
+			if (this.node) {
+				this.node.destroy();
+				this.node = null;
 			}
-		}, 500);
+		}.delay(500, this));
 		return this;
 	},
 	createNode : function () {
@@ -1853,14 +1879,18 @@ var Trace = LibCanvas.namespace('Utils').Trace = atom.Class({
 				dblclick : function () { this.stop().destroy(); }.context(this)
 			});
 		return this.events();
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.Trace]')
 });
 
 window.trace = function (msg) {
 	var L = arguments.length;
-	if (L) {
-		while (L--) new Trace(arguments[L]);
-	} else return new Trace();
+	if (L > 0) {
+		if (L > 1) msg = atom.toArray(arguments);
+		return new Trace(msg);
+	} else {
+		return new Trace();
+	}
 };
 
 }();
@@ -1905,7 +1935,9 @@ LibCanvas.namespace('Inner').FrameRenderer = atom.Class({
 	drawAll : function () {
 		var elems = this.elems.sortBy('getZIndex');
 		for (var i = elems.length; i--;) {
-			if (elems[i].isReady()) elems[i].draw();
+			if (elems[i].isReady()) {
+				elems[i].draw();
+			}
 		}
 		return this;
 	},
@@ -1923,28 +1955,33 @@ LibCanvas.namespace('Inner').FrameRenderer = atom.Class({
 				);
 			}
 		}.context(this));
-		return this;
 	},
 	innerInvoke : function (type, time) {
 		var f = this.funcs[type].sortBy('priority');
 		for (var i = f.length; i--;) f[i].call(this, time);
 		return this;
 	},
-	renderFrame : function (time) {
-		this.innerInvoke('plain', time);
-		if (this.checkAutoDraw()) {
-			this.processing('pre');
-			if (this.isReady()) {
-				this.innerInvoke('render', time);
-				this.drawAll();
+	renderLayer: function (layer, time) {
+		layer.innerInvoke('plain', time);
+		if (layer.checkAutoDraw()) {
+			layer.processing('pre');
+			if (layer.isReady()) {
+				layer.innerInvoke('render', time);
+				layer.drawAll();
 			} else {
-				this.renderProgress();
+				layer.renderProgress();
 			}
-			this.processing('post');
-			this.show();
+			layer.processing('post');
+			layer.show();
 			return true;
 		}
 		return false;
+	},
+	renderFrame : function (time) {
+		for (var n in this._layers) {
+			this.renderLayer(this._layers[n], time);
+		}
+		return true;
 	}
 });
 
@@ -1996,7 +2033,8 @@ LibCanvas.namespace('Utils').FpsMeter = atom.Class({
 			this.trace.trace('FPS: counting');
 		}
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.FpsMeter]')
 });
 
 /*
@@ -2094,7 +2132,13 @@ LibCanvas.Shape = atom.Class({
 	},
 	getPoints : function () {
 		return { from : this.from, to : this.to };
-	}
+	},
+	dump: function (shape) {
+		if (!shape) return this.toString();
+		var p = function (p) { return '[' + p.x + ', ' + p.y + ']'; };
+		return '[shape ' + shape + '(from'+p(this.from)+', to'+p(this.to)+')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Shape]')
 });
 
 /*
@@ -2247,7 +2291,16 @@ Rectangle = LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 			x : (diff.x / fromRect.width ) * this.width,
 			y : (diff.y / fromRect.height) * this.height
 		});
-	}
+	},
+	snapToPixel: function () {
+		this.from.snapToPixel();
+		this.to.snapToPixel();
+		return this;
+	},
+	dump: function () {
+		return this.parent('Rectangle');
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Rectangle]')
 });
 
 };
@@ -2326,7 +2379,8 @@ LibCanvas.namespace('Utils').ImagePreloader = atom.Class({
 	ready : function (fn) {
 		this.addEvent('ready', fn);
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.ImagePreloader]')
 });
 
 /*
@@ -2455,7 +2509,8 @@ LibCanvas.namespace('Shapes').Polygon = atom.Class({
 	},
 	clone: function () {
 		return new this.self(this.points);
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Polygon]')
 });
 
 };
@@ -2523,7 +2578,7 @@ LibCanvas.namespace('Utils').ProgressBar = atom.Class({
 		var pbRect = new Rectangle({
 			from : this.coord,
 			size : Object.collect(s, ['width', 'height'])
-		});
+		}).snapToPixel();
 
 		this.libcanvas.ctx
 			.fillAll(s['bgColor'])
@@ -2536,14 +2591,14 @@ LibCanvas.namespace('Utils').ProgressBar = atom.Class({
 			var line = this.line;
 			var prog   = this.progress;
 			var width  = ((line.width  - 2) * prog).round();
-			if (width) {
+			if (width > 1) {
 				var height = line.height - 2;
 				var c = this.coord;
 
 				this.libcanvas.ctx.drawImage({
 					image : line,
-					crop  : [0, 0 , width, height],
-					draw  : [c.x+1, c.y+1, width, height]
+					crop  : [    0,    0 , width-1, height-1],
+					draw  : [c.x+1, c.y+1, width-1, height-1]
 				});
 			}
 		}
@@ -2607,7 +2662,8 @@ LibCanvas.namespace('Utils').ProgressBar = atom.Class({
 		this.drawBorder().drawLine();
 		this.libcanvas.ctx.restore();
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.ProgressBar]')
 });
 
 })(LibCanvas);
@@ -2635,6 +2691,8 @@ provides: Inner.DownloadingProgress
 */
 LibCanvas.namespace('Inner').DownloadingProgress = atom.Class({
 	getImage : function (name) {
+		if (this.parentLayer) return this.parentLayer.getImage(name);
+		
 		if (this.images && this.images[name]) {
 			return this.images[name];
 		} else {
@@ -2642,6 +2700,8 @@ LibCanvas.namespace('Inner').DownloadingProgress = atom.Class({
 		}
 	},
 	getAudio: function (name) {
+		if (this.parentLayer) return this.parentLayer.getAudio(name);
+		
 		if (this._audio) {
 			var audio = this._audio.get(name);
 			if (audio) return audio;
@@ -2649,6 +2709,8 @@ LibCanvas.namespace('Inner').DownloadingProgress = atom.Class({
 		throw new Error('No audio «' + name + '»');
 	},
 	renderProgress : function () {
+		if (this.parentLayer) return;
+		
 		if (this.options.progressBarStyle && !this.progressBar) {
 			this.progressBar = new LibCanvas.Utils.ProgressBar()
 				.setStyle(this.options.progressBarStyle);
@@ -2662,6 +2724,15 @@ LibCanvas.namespace('Inner').DownloadingProgress = atom.Class({
 	},
 	createPreloader : function () {
 		if (!this.imagePreloader) {
+			
+			if (this.parentLayer) {
+				this.parentLayer.addEvent('ready', function () {
+					this.readyEvent('ready');
+				}.context(this));
+				this.imagePreloader = true;
+				return;
+			}
+			
 			if (this.options.preloadAudio) {
 				this._audio = new LibCanvas.Utils.AudioContainer(this.options.preloadAudio);
 			} else {
@@ -2686,6 +2757,7 @@ LibCanvas.namespace('Inner').DownloadingProgress = atom.Class({
 	},
 	isReady : function () {
 		this.createPreloader();
+		if (this.parentLayer) return this.parentLayer.isReady();
 		return !this.options.preloadImages || (this.imagePreloader && this.imagePreloader.isReady());
 	}
 });
@@ -2731,6 +2803,9 @@ LibCanvas.Canvas2D = atom.Class({
 		keyboard: function () {
 			throw new Error('Keyboard is not listened by libcanvas');
 		},
+		wrapper: function () {
+			return atom().create('div').addClass('libcanvas-layers-container');
+		},
 		invoker: function () {
 			return new LibCanvas.Invoker({
 				context: this,
@@ -2741,6 +2816,7 @@ LibCanvas.Canvas2D = atom.Class({
 	},
 
 	options: {
+		autoStart: true,
 		clear: true,
 		backBuffer: 'on',
 		fps: 30
@@ -2757,6 +2833,7 @@ LibCanvas.Canvas2D = atom.Class({
 	set autoUpdate (value) { },
 	get autoUpdate () { return true; },
 	interval   : null,
+	name: null,
 
 	initialize : function (elem, options) {
 		if (typeof elem == 'string') elem = atom(elem);
@@ -2765,24 +2842,58 @@ LibCanvas.Canvas2D = atom.Class({
 		this.setOptions(options);
 
 		this.origElem = elem;
-		this.origCtx  = elem.getContext('2d-libcanvas');
+		this.origCtx = elem.getContext('2d-libcanvas');
+		var aElem = this.origElem.atom = atom(elem)
+			.css('position', 'absolute');
+		
+		if (this.parentLayer) {
+			aElem.appendTo(this.wrapper);
+		} else {
+			this._layers[this.name = 'main'] = this;
+			this.zIndex = Infinity;
+			aElem
+				.attr('data-layer-name', 'main')
+				.wrap(this.wrapper.css({
+					width : elem.width  + 'px',
+					height: elem.height + 'px'
+				}));
+		}
 
 		this.createProjectBuffer().addClearer();
 
 		this.update = this.update.context(this);
+
+		if (this.options.autoStart) this.isReady();
 
 		this.addEvent('ready', function () {
 			this.update.delay(0)
 		});
 	},
 
-	set: function (props) {
-		for (var i in props) {
-			if (this.origElem != this.elem) {
-				this.origElem[i] = props[i];
-			}
-			this.elem[i] = props[i];
+	size: function (size, height, wrapper) {
+		if (typeof size == 'object') {
+			wrapper = height;
+		} else {
+			size = { width: size, height: height };
 		}
+		for (var i in size) {
+			if (this.origElem != this.elem) {
+				this.origElem[i] = size[i];
+			}
+			this.elem[i] = size[i];
+			wrapper && this.wrapper.css(i, size[i] + 'px');
+		}
+		return this;
+	},
+	
+	shift: function (shift, left) {
+		if (left != null) {
+			shift = { top: shift, left: left };
+		}
+		this.origElem.atom.css({
+			'marginTop' : shift.top,
+			'marginLeft': shift.left
+		});
 		return this;
 	},
 
@@ -2906,11 +3017,95 @@ LibCanvas.Canvas2D = atom.Class({
 		return this;
 	},
 
+	_layers: {},
+	parentLayer: null,
+	layer: function (name) {
+		if (!name) {
+			// gettin master layer
+			return this.parentLayer == null ? this : this.parentLayer.layer();
+		}
+		
+		if (name in this._layers) {
+			return this._layers[name];
+		} else {
+			throw new Error('No layer «' + name + '»');
+		}
+	},
+	
+	createLayer: function (name, z) {
+		if (name in this._layers) {
+			throw new Error('Layer «' + name + '» already exists');
+		}
+		var layer = this._layers[name] = new LibCanvas.Layer(this, this.options);
+		layer._layers = this._layers;
+		layer.zIndex  = z;
+		layer.name    = name;
+		layer.origElem.atom.attr({ 'data-layer-name': name });
+		return layer;
+	},
+	
+	get topLayer () {
+		var max = 0, layers = this._layers, nameMax = null;
+		for (var name in layers) if (layers[name].zIndex > max) {
+			nameMax = name;
+			max     = layers[name].zIndex;
+		}
+		return layers[nameMax] || null;
+	},
+	
+	get maxZIndex () {
+		var top = this.topLayer;
+		return top ? top.zIndex : 0;
+	},
+	
+	_zIndex: null,
+	
+	set zIndex (z) {
+		var cur = this._zIndex, layers = this._layers, name;
+		if (z == null || z == Infinity) {
+			z = 1;
+			// ищем самый большой z-index и присваиваем текущему элементу на единицу больше
+			for (name in layers) {
+				var thatZ = layers[name].zIndex;	
+				if (thatZ && thatZ >= z) z = thatZ;
+			}
+			if (cur == null) z++;
+		}
+		z = z.limit(1, this.maxZIndex + 1);
+		if (cur != null) {
+			for (name in layers) {
+				if (layers[name] != this) {
+					var lz = layers[name].zIndex;
+					if (z < cur) { // zIndex уменьшается
+						if (z <= lz && lz < cur) layers[name]._zIndex++;
+					} else { // zIndex увеличивается
+						if (cur < lz && lz <= z) layers[name]._zIndex--;
+					}
+				}
+			}
+		}
+		this.origElem.atom.css('zIndex', z);
+		this._zIndex = z;
+	},
+	
+	get zIndex () {
+		return this._zIndex;
+	},
 
 	// not clonable
 	get clone () {
 		return this;
-	}
+	},
+	dump: function () {
+		var el = this.elem, 
+			pr = [
+				'"' + this.name + '"',
+				'z=' + this.zIndex,
+				'e=' + this.elems.length
+			].join(',');
+		return '[LibCanvas(' + pr + ')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Canvas2D]')
 });
 
 /*
@@ -3009,7 +3204,11 @@ LibCanvas.namespace('Shapes').Circle = atom.Class({
 	},
 	getPoints : function () {
 		return { center : this.center };
-	}
+	},
+	dump: function () {
+		return '[shape Circle(center['+this.center.x+', '+this.center.y+'], '+this.radius+')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Circle]')
 });
 
 }();
@@ -3241,7 +3440,6 @@ LibCanvas.Context2D = atom.Class({
 		try {
 			this.ctx2d[method].apply(this.ctx2d, args || []);
 		} catch (e) {
-			console.log('ctx', this, this.ctx2d);
 			atom.log('Error in context2d.original(', method, ',', (args || []), ')');
 			throw e;
 		}
@@ -3713,7 +3911,8 @@ LibCanvas.Context2D = atom.Class({
 	},
 	drawWindow : function () {
 		return this.original('drawWindow', arguments);
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Context2D]')
 	// Such moz* methods wasn't duplicated:
 	// mozTextStyle, mozDrawText, mozMeasureText, mozPathText, mozTextAlongPath
 
@@ -3791,7 +3990,8 @@ var Keyboard = LibCanvas.Keyboard = atom.Class({
 			return this.keyStates[this.keyName(keyName)];
 		},
 		keyName: function (code) {
-			return (typeof code == 'string') ? code : this.key(code);
+			return typeof code == 'string' && code in this.keyCodes ? 
+				code : this.key(code);
 		},
 		key: function (code) {
 			if ('keyCode' in code) return this.codeNames[code.keyCode];
@@ -3846,13 +4046,79 @@ var Keyboard = LibCanvas.Keyboard = atom.Class({
 		this.debugTrace = on === false ? null : new LibCanvas.Utils.Trace();
 		this.debugUpdate();
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Keyboard]')
 });
 
 Keyboard.extend({ codeNames: Object.invert(Keyboard.keyCodes) });
 
 };
 
+
+/*
+---
+
+name: "Layer"
+
+description: "Layer"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- LibCanvas
+	- Canvas2D
+
+provides: Layer
+
+...
+*/
+
+new function () {
+	
+var callParent = function (method) {
+	return function () {
+		this.parentLayer[method].apply(this.parentLayer, arguments);
+		return this;
+	};
+};
+
+LibCanvas.Layer = atom.Class({
+	Extends: LibCanvas.Canvas2D,
+
+	Generators: {
+		mouse: function () {
+			return this.parentLayer.mouse;
+		},
+		keyboard: function () {
+			return this.parentLayer.keyboard;
+		},
+		invoker: function () {
+			return this.parentLayer.invoker;
+		},
+		wrapper: function () {
+			return this.parentLayer.wrapper;
+		}
+	},
+	
+	initialize : function (elem, options) {
+		this.parentLayer = elem;
+
+		this.parent(elem.createBuffer(), options);
+	},
+
+	listenMouse : callParent('listenMouse'),
+	listenKeyboard :  callParent('listenKeyboard'),
+
+	start : function () {
+		throw new Error('Start can be called only from master layer');
+	},
+	toString: Function.lambda('[object LibCanvas.Layer]')
+});
+
+};
 
 /*
 ---
@@ -3912,10 +4178,6 @@ LibCanvas.namespace('Engines').Tile = atom.Class({
 		this.oldMatrix = matrix.clone();
 		return this;
 	},
-	// todo: check if clone is successfull
-	//cloneMatrix : function (matrix) {
-	//	return matrix.clone();
-	//},
 	addTile : function (index, fn) {
 		this.tiles[index] = fn;
 		return this;
@@ -3927,7 +4189,7 @@ LibCanvas.namespace('Engines').Tile = atom.Class({
 	setSize : function (cellWidth, cellHeight, margin) {
 		this.cellWidth  = cellWidth;
 		this.cellHeight = cellHeight;
-		this.margin = margin;
+		this.margin = margin || 0;
 		return this;
 	},
 	update : function () {
@@ -3999,7 +4261,8 @@ LibCanvas.namespace('Engines').Tile = atom.Class({
 	},
 	height : function () {
 		return this.matrix.length || 0;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Engines.Tile]')
 });
 
 /*
@@ -4405,7 +4668,8 @@ LibCanvas.namespace('Processors').Clearer = atom.Class({
 		this.style ?
 			libcanvas.ctx.fillAll(this.style) :
 			libcanvas.ctx.clearAll();
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Processors.Clearer]')
 	// processCanvas : function (elem) {}
 	// processPixels : function (elem) {}
 });
@@ -4473,7 +4737,8 @@ LibCanvas.namespace('Processors').Color = atom.Class({
 			case 5: return [bri, p, q];
 		}
 		return null;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Processors.Color]')
 });
 
 }();
@@ -4531,7 +4796,8 @@ LibCanvas.namespace('Processors').Grayscale = atom.Class({
 			}
 		}
 		return data;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Processors.Grayscale]')
 });
 
 /*
@@ -4591,7 +4857,8 @@ LibCanvas.namespace('Processors').HsbShift = atom.Class({
 			d[i+2] = rgb[2];
 		}
 		return data;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Processors.HsbShift]')
 });
 
 /*
@@ -4619,7 +4886,8 @@ LibCanvas.namespace('Processors').Invert = atom.Class({
 		var d = data.data, i = 0, l = d.length;
 		for (;i < l; i++) if (i % 4 != 3) d[i] = 255 - d[i];
 		return data;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Processors.Invert]')
 });
 
 /*
@@ -4656,7 +4924,8 @@ LibCanvas.namespace('Processors').Mask = atom.Class({
 			d[i+2] = c[2];
 		}
 		return data;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Processors.Mask]')
 });
 
 /*
@@ -4754,7 +5023,11 @@ LibCanvas.namespace('Shapes').Ellipse = atom.Class({
 	draw : function (ctx, type) {
 		this.processPath(ctx)[type]();
 		return this;
-	}
+	},
+	dump: function () {
+		return this.parent('Ellipse');
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Ellipse]')
 });
 
 /*
@@ -4855,7 +5128,11 @@ LibCanvas.namespace('Shapes').Line = atom.Class({
 		ctx.moveTo(this.from).lineTo(this.to);
 		if (!noWrap) ctx.closePath();
 		return ctx;
-	}
+	},
+	dump: function () {
+		return this.parent('Line');
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Line]')
 });
 
 };
@@ -4943,7 +5220,8 @@ var Path = LibCanvas.namespace('Shapes').Path = atom.Class({
 			}
 		});
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Path]')
 });
 
 LibCanvas.namespace('Shapes.Path').Builder = atom.Class({
@@ -5111,7 +5389,6 @@ LibCanvas.namespace('Ui').Shaper = atom.Class({
 	initialize : function (libcanvas, options) {
 		this.update = libcanvas.update;
 
-		this.libcanvas = libcanvas;
 		this.setOptions(options);
 		this.setShape(options.shape);
 
@@ -5187,6 +5464,10 @@ LibCanvas.namespace('Ui').Shaper = atom.Class({
 		this.shape.radius = value;
 		this.update();
 	},
+	dump: function () {
+		return '[Shaper ' + this.shape.dump() + ']';
+	},
+	toString: Function.lambda('[object LibCanvas.Ui.Shaper]')
 });
 
 };
@@ -5245,7 +5526,8 @@ LibCanvas.namespace('Utils').AudioContainer = atom.Class({
 		this.allAudios.forEach(function (audio) {
 			audio.muted = muted;
 		})
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.AudioContainer]')
 });
 
 /*
@@ -5406,7 +5688,8 @@ LibCanvas.namespace('Utils').AudioElement = atom.Class({
 			}.context(this)
 		});
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.AudioElement]')
 });
 
 /*
@@ -5581,7 +5864,8 @@ LibCanvas.namespace('Utils').StopWatch = atom.Class({
 		return (s < 60) ?
 			d2((t / 1000).toFixed(1)) :
 			h + ':' + d2(m) + ':' + d2(s % 60);
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.StopWatch]')
 });
 
 /*
@@ -5640,7 +5924,8 @@ LibCanvas.namespace('Utils').Storage = atom.Class({
 		typeof name == 'object' ?
 			atom.extend(this.store, name) : (this.store[name] = value);
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.Storage]')
 });
 
 /*
@@ -5687,7 +5972,8 @@ LibCanvas.namespace('Utils').TimeLogger = atom.Class({
 		this.sw.stop();
 		if (this.time.length > 25) this.time.shift();
 		this.trace.trace(msg + this.time.average().toFixed(2));
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.TimeLogger]')
 });
 
 }();
@@ -5747,7 +6033,8 @@ LibCanvas.namespace('Utils').Translator = atom.Class({
 			}
 		});
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Utils.Translator]')
 
 });
 
