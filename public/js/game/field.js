@@ -6,6 +6,10 @@ var Field = atom.Class({
 	zIndex: 1,
 	
 	initialize: function (options) {
+		this.shots = {};
+		this.units = {};
+		this._translate = new Point(0, 0);
+
 		new LibCanvas(options.element, {
 			preloadImages: {
 				aim   : 'images/aim.png',
@@ -16,7 +20,7 @@ var Field = atom.Class({
 				shot: 'sounds/shot.*:8'
 			}
 		})
-		.set(options.screen)
+		.size(options.screen, true)
 		.start()
 		.addElement(this);
 		
@@ -33,9 +37,6 @@ var Field = atom.Class({
 	get player () {
 		return 'playerId' in this ? this.getUnit(this.playerId) : null;
 	},
-
-	shots: {},
-	units: {},
 	createUnit: function (unit) {
 		unit = new Unit(this, unit);
 		this.libcanvas.addElement(unit).update();
@@ -61,7 +62,7 @@ var Field = atom.Class({
 		}
 		return this;
 	},
-	_translate: new Point(0, 0),
+
 	get translate () {
 		if (!this.player) return new Point(0,0);
 		
@@ -165,7 +166,7 @@ var Field = atom.Class({
 			var id = death.unit.id;
 			this.deleteUnit(id);
 			if (id == this.playerId) {
-				atom()
+				atom.dom()
 					.create('p')
 					.css({
 						font : 'bold 36px sans-serif',

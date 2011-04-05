@@ -1,0 +1,37 @@
+html, body {
+	background: #222;
+	color: #eee;
+}
+
+#jet-editor .menu {
+	float: left;
+	width: 160px;
+}
+#jet-editor .menu button {
+	width: 150px;
+	border: 1px solid black;
+	background: -webkit-gradient(linear, left top, left bottom, from(#444), to(#222));
+	background: linear-gradient(top,#444,#222);
+	border-radius: 3px;
+	padding: 4px 2px;
+	color: white;
+}
+#jet-editor .menu button:hover {
+	box-shadow: 0 0 5px #9f9;
+}
+#jet-editor .menu button:active {
+	background: -webkit-gradient(linear, left top, left bottom, from(#222), to(#2e2e2e));
+	background: linear-gradient(top,#222,#2e2e2e);
+}
+
+#jet-editor .screen {
+	margin-left: 160px;
+}
+
+#jet-editor .libcanvas-layers-container {
+	border: 1px dashed #040;
+	background: black;
+}
+#jet-editor .libcanvas-layers-container canvas {
+	cursor: none;
+}

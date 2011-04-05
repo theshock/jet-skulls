@@ -52,11 +52,11 @@ provides: atom
 		} else throw new TypeError();
 
 		var ext = proto ? elem[prototype] : elem;
-		for (var i in from) {
+		for (var i in from) if (i != 'constructor') {
 			if (safe && i in ext) continue;
-			
+
 			if ( !implementAccessors(from, ext, i) ) {
-				ext[i] = i == 'prototype' ? from[i] : clone(from[i]);
+				ext[i] = clone(from[i]);
 			}
 		}
 		return elem;
@@ -73,13 +73,13 @@ provides: atom
 		if (item.nodeName){
 			if (item.nodeType == 1) return 'element';
 			if (item.nodeType == 3) return typeOf.textnodeRE.test(item.nodeValue) ? 'textnode' : 'whitespace';
-		} else if (item.callee && typeof item.length == 'number'){
+		} else if (item && item.callee && typeof item.length == 'number'){
 			return 'arguments';
 		}
 		
-		var t = typeof item;
+		var type = typeof item;
 		
-		return (t == 'object' && atom.Class && item instanceof atom.Class) ? 'class' : t;
+		return (type == 'object' && atom.Class && item instanceof atom.Class) ? 'class' : type;
 	};
 	typeOf.textnodeRE = /\S/;
 	typeOf.types = {};
@@ -93,7 +93,6 @@ provides: atom
 			key = to;
 			to  = null;
 		}
-		
 		// #todo: implement with getOwnPropertyDescriptor && defineProperty
 		
 		var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key);
@@ -118,10 +117,8 @@ provides: atom
 			return c;
 		},
 		object: function (object) {
-			if ('clone' in object) {
-				return typeof object.clone == 'function' ?
-					object.clone() : object.clone;
-			}
+			if (typeof object.clone == 'function') return object.clone();
+			
 			var c = {};
 			for (var key in object) if (!implementAccessors(object, c, key)) {
 				c[key] = clone(object[key]);
@@ -178,13 +175,15 @@ provides: atom
 		implementAccessors: implementAccessors, // getter+setter
 		typeOf: typeOf,
 		clone: clone,
-		merge: merge,
-		plugins : {}
+		/** @deprecated */
+		merge: merge
 	});
 
-	var atomFactory = atom.extend(function (args) {
+	var atomFactory = function (args) {
 		return Atom[apply](this, args);
-	}, { prototype : Atom[prototype] });
+	};
+	atomFactory[prototype] = Atom[prototype];
+
 
 	// JavaScript 1.8.5 Compatiblity
 	atom.implement(Function, 'safe', {
@@ -245,8 +244,9 @@ provides: dom
 ...
 */
 new function () {
-	var win = window,
-	    doc = win.document,
+	var undefined,
+		win = window,
+		doc = win.document,
 		tagNameRE = /^[-_a-z0-9]+$/i,
 		classNameRE = /^\.[-_a-z0-9]+$/i,
 		idRE = /^#[-_a-z0-9]+$/i,
@@ -258,6 +258,7 @@ new function () {
 		getElementsByClassName = getElement + 'sByClassName',
 		getElementsByTagName = getElement + 'sByTagName',
 		querySelectorAll = 'querySelectorAll',
+		addEventListener = 'addEventListener',
 		appendChild = 'appendChild',
 		setter = function (args) {
 			if (args.length == 1) {
@@ -271,56 +272,88 @@ new function () {
 		prevent = function (e) {
 			e.preventDefault();
 			return false;
+		},
+		ignoreCssPostfix = {
+			zIndex: true,
+			fontWeight: true,
+			opacity: true,
+			zoom: true,
+			lineHeight: true
+		},
+		domReady = false,
+		onDomReady = [];
+	
+	new function () {
+		var ready = function () {
+			if (domReady) return;
+			
+			domReady = true;
+			
+			for (var i = 0, l = onDomReady[length]; i < l; onDomReady[i++]());
+			
+			onDomReady = [];
 		};
+		
+		doc[addEventListener]('DOMContentLoaded', ready, false);
+		win[addEventListener]('load', ready, false);
+	};
 
-	atom.extend({
-		initialize : function (sel, context) {
-			if (!arguments[length]) {
-				this.elems = [doc];
-				return this;
-			}
+	var dom = function (sel, context) {
+		if (! (this instanceof dom)) {
+			return new dom(sel, context);
+		}
 
-			context = context || doc;
-			if (arguments.length == 2) return atom(context).find(sel);
-
-			if (typeof sel == 'function' && !atom.isAtom(sel)) {
-				this.elems = [context];
-				return this.ready(sel);
-			}
-			this.elems = (sel instanceof HTMLCollection) ? toArray(sel)
-				: (typeof sel == 'string') ? atom.findByString(context, sel)
-				: (atom.isAtom(sel))       ? sel.elems
-				: (isArray(sel))     ? sel
-				:      atom.find(context, sel);
+		if (!arguments[length]) {
+			this.elems = [doc];
 			return this;
+		}
+
+		if (context !== undefined) {
+			return new dom(context || doc).find(sel);
+		}
+		context = context || doc;
+
+		if (typeof sel == 'function' && !(sel instanceof dom)) {
+			// onDomReady
+			var fn = sel.bind(this, atom, dom);
+			domReady ? setTimeout(fn, 1) : onDomReady.push(fn);
+			return this;
+		}
+
+		var elems = this.elems =
+			  sel instanceof HTMLCollection ? toArray(sel)
+			: typeof sel == 'string' ? dom.query(context, sel)
+			: sel instanceof dom     ? toArray(sel.elems)
+			: isArray(sel)           ? toArray(sel)
+			:                          dom.find(context, sel);
+
+		if (elems.length == 1 && elems[0] == null) {
+			elems.length = 0;
+		}
+
+		return this;
+	};
+	atom.extend(dom, {
+		query : function (context, sel) {
+			return sel.match(idRE)        ?        [context[getElementById        ](sel.substr(1))] :
+			       sel.match(classNameRE) ? toArray(context[getElementsByClassName](sel.substr(1))) :
+			       sel.match(tagNameRE)   ? toArray(context[getElementsByTagName  ](sel)) :
+			                                toArray(context[querySelectorAll      ](sel));
 		},
-		findByString : function (context, sel) {
-			var find = atom.find;
-			return sel.match(idRE)     ? find(context, { id: sel.substr(1) }) :
-				sel.match(classNameRE) ? find(context, { Class: sel.substr(1) }) :
-				sel.match(tagNameRE)   ? find(context, { tag: sel }) :
-					toArray(context[querySelectorAll](sel));
-		},
-		find : function (context, sel) {
+		find: function (context, sel) {
 			if (!sel) return context == null ? [] : [context];
 
-			var result = atom.isDomElement(sel) ? [sel]
-				:  typeof sel == 'string' ? atom.findByString(context, sel)
-				: (sel.id   ) ?        [context[getElementById](sel.id) ]
-				: (sel.tag  ) ? toArray(context[getElementsByTagName](sel.tag))
-				: (sel.Class) ? toArray(context[getElementsByClassName](sel.Class))
-				:                      [context];
+			var result = sel.nodeName ? [sel]
+				: typeof sel == 'string' ? dom.query(context, sel) : [context];
 			return (result.length == 1 && result[0] == null) ? [] : result;
 		},
-		isDomElement: function (elem) {
-			return elem.nodeName;
+		isElement: function (node) {
+			return !!(node && node.nodeName);
 		}
-	}).implement({
-		get : function (index) {
-			return this.elems[index * 1 || 0];
-		},
+	});
+	atom.implement(dom, {
 		get length() {
-			return this.elems.length;
+			return this.elems ? this.elems.length : 0;
 		},
 		get body() {
 			return this.find('body');
@@ -328,8 +361,25 @@ new function () {
 		get first() {
 			return this.elems[0];
 		},
+		get : function (index) {
+			return this.elems[index * 1 || 0];
+		},
+		filter: function (sel) {
+			if (sel.match(tagNameRE)) var tag = sel;
+			if (sel.match(idRE     )) var id  = sel.substr(1);
+			return new dom(this.elems.filter(function (elem) {
+				return tag ? elem.tagName == tag :
+				       id  ? elem.id      == id :
+				  elem.parentNode && toArray(
+				    elem.parentNode.querySelectorAll(sel)
+				  ).indexOf(elem) >= 0;
+			}));
+		},
+		is: function (selector) {
+			return this.filter(selector).length > 0;
+		},
 		html : function (value) {
-			if (arguments.length) {
+			if (value !== undefined) {
 				this.first.innerHTML = value;
 				return this;
 			} else {
@@ -341,7 +391,7 @@ new function () {
 				attr  = index;
 				index = 0;
 			}
-			var elem = atom(this.get(index).createElement(tagName));
+			var elem = dom(this.get(index).createElement(tagName));
 			if (attr) elem.attr(attr);
 			return elem;
 		},
@@ -364,7 +414,13 @@ new function () {
 				return this.first.style[css[0]];
 			}
 			return this.each(function (elem) {
-				atom.extend(elem.style, css);
+				for (var i in css) {
+					var value = css[i];
+					if (typeof value == 'number' && !ignoreCssPostfix[i]) {
+						value += 'px';
+					}
+					elem.style[i] = value;
+				}
 			});
 		},
 		bind : function () {
@@ -373,69 +429,65 @@ new function () {
 				for (var i in events) {
 					if (elem == doc && i == 'load') elem = win;
 					var fn = events[i] === false ? prevent : events[i].bind(bind);
-					elem.addEventListener(i, fn, false);
+					elem[addEventListener](i, fn, false);
 				}
 			});
 		},
 		// todo: unbind
-		delegate : function (tagName, event, fn) {
+		delegate : function (selector, event, fn) {
 			return this.bind(event, function (e) {
-				if (e.target.tagName.toLowerCase() == tagName.toLowerCase()) {
+				if (new dom(e).is(selector)) {
 					fn.apply(this, arguments);
 				}
 			});
 		},
 		wrap : function (wrapper) {
-			wrapper = atom(wrapper).first;
-			var obj = this.first;
-			obj.parentNode.replaceChild(wrapper, obj);
-			wrapper[appendChild](obj);
-			return this;
+			wrapper = new dom(wrapper).first;
+			return this.replaceWith(wrapper).appendTo(wrapper);
 		},
-		ready : function (full, fn) {
-			if (arguments[length] == 1) {
-				fn   = full;
-				full = false;
-			}
-			return this.bind(full ? 'load' : 'DOMContentLoaded', fn.bind(this, atom));
+		replaceWith: function (element) {
+			element = dom(element).first;
+			var obj = this.first;
+			obj.parentNode.replaceChild(element, obj);
+			return this;
 		},
 		find : function (selector) {
 			var result = [];
 			this.each(function (elem) {
-				var found = atom.find(elem, selector);
+				var found = dom.find(elem, selector);
 				for (var i = 0, l = found[length]; i < l; i++) {
 					if (result.indexOf(found[i]) === -1) result.push(found[i]);
 				}
 			});
-			return atom(result);
+			return new dom(result);
 		},
 		appendTo : function (to) {
 			var fr = doc.createDocumentFragment();
 			this.each(function (elem) {
 				fr[appendChild](elem);
 			});
-			atom(to).first[appendChild](fr);
+			dom(to).first[appendChild](fr);
 			return this;
 		},
 		addClass: function (classNames) {
 			if (!classNames) return this;
-			
+
 			if (!isArray(classNames)) classNames = [classNames];
-			
+
 			return this.each(function (elem) {
 				var property = elem.className, current = ' ' + property + ' ';
-				
+
 				for (var i = classNames.length; i--;) {
 					var c = ' ' + classNames[i];
 					if (current.indexOf(c + ' ') < 0) property += c;
 				}
-				
+
 				elem.className = property.trim();
 			});
 		},
 		removeClass: function (classNames) {
 			if (!isArray(classNames) && classNames) classNames = [classNames];
-			
+
 			return this.each(function (elem) {
 				var current = ' ' + elem.className + ' ';
 				for (var i = classNames.length; i--;) {
@@ -445,15 +497,18 @@ new function () {
 			});
 		},
 		log : function () {
-			atom.log.apply(atom, arguments[length] ? arguments : ['atom', this.elems]);
+			atom.log.apply(atom, arguments[length] ? arguments : ['atom.dom', this.elems]);
 			return this;
 		},
 		destroy : function () {
 			return this.each(function (elem) {
 				elem.parentNode.removeChild(elem);
 			});
-		}
+		},
+		constructor: dom
 	});
+
+	atom.extend({ dom: dom });
 };
 
 /*
@@ -539,7 +594,7 @@ provides: ajax.dom
 ...
 */
 
-atom.implement({
+atom.implement(atom.dom, {
 	ajax : function (config) {
 		config = atom.extend({
 			onload: function (res) {
@@ -638,35 +693,33 @@ var typeOf = atom.typeOf,
 
 var Class = function (params) {
 	if (Class.$prototyping) {
-		reset(this);
 		return this;
 	}
 
 	if (typeOf(params) == 'function') params = {initialize: params};
 
-	var newClass = function(){
-		reset(this);
-		if (newClass.$prototyping) return this;
+	var Constructor = function(){
+		if (Constructor.$prototyping) return this;
 		return this.initialize ? this.initialize.apply(this, arguments) : this;
 	};
-	extend(newClass, Class);
-	newClass[prototype] = getInstance(Class);
-	newClass
+	extend(Constructor, Class);
+	Constructor[prototype] = getInstance(Class);
+	Constructor
 		.implement(params, false)
 		.reserved(true, {
 			parent: parent,
-			self  : newClass
+			self  : Constructor
 		})
 		.reserved({
 			factory : (function() {
 				// Должно быть в конце, чтобы успел создаться прототип
-				function F(args) { return newClass.apply(this, args); }
-				F[prototype] = newClass[prototype];
-				return function(args) { return new F(args || []); }
+				function Factory(args) { return Constructor.apply(this, args); }
+				Factory[prototype] = Constructor[prototype];
+				return function(args) { return new Factory(args || []); }
 			})()
 		});
 
-	return newClass;
+	return Constructor;
 };
 
 var parent = function(){
@@ -676,25 +729,6 @@ var parent = function(){
 		previous = parent && parent[prototype][name];
 	if (!previous) throw new Error('The method «' + name + '» has no parent.');
 	return previous.apply(this, arguments);
-};
-
-var reset = function(object){
-	for (var key in object) if (!accessors(object, key)) {
-		var value = object[key];
-		if (value && typeof value == 'object') {
-			if ('clone' in value) {
-				object[key] = (typeof value.clone == 'function') ?
-					value.clone() : value.clone;
-			} else { // if (typeOf(value) == 'object') {
-				var F = function(){};
-				F[prototype] = value;
-				object[key] = reset(new F);
-			}
-		} else {
-			object[key] = value;
-		}
-	}
-	return object;
 };
 
 var wrap = function(self, key, method){
@@ -855,6 +889,10 @@ var removeOn = function(string){
 	});
 };
 
+var initEvents = function (object) {
+	if (!object._events) object._events = { $ready: {} };
+};
+
 var nextTick = function (fn) {
 	nextTick.fn.push(fn);
 	if (!nextTick.id) {
@@ -873,9 +911,9 @@ nextTick.reset();
 
 atom.extend(Class, {
 	Events: Class({
-		_events: { $ready: {} },
-
 		addEvent: function(name, fn) {
+			initEvents(this);
+
 			var i, l, onfinish = [];
 			if (arguments.length == 1 && typeof name != 'string') {
 				for (i in name) {
@@ -904,6 +942,8 @@ atom.extend(Class, {
 			return this;
 		},
 		removeEvent: function (name, fn) {
+			initEvents(this);
+
 			if (arguments.length == 1 && typeof name != 'string') {
 				for (i in name) {
 					this.addEvent(i, name[i]);
@@ -927,10 +967,14 @@ atom.extend(Class, {
 			return this;
 		},
 		isEventAdded: function (name) {
+			initEvents(this);
+			
 			var e = this._events[name];
 			return !!(e && e.length);
 		},
 		fireEvent: function (name, args) {
+			initEvents(this);
+			
 			name = removeOn(name);
 			var funcs = this._events[name];
 			if (funcs) {
@@ -943,6 +987,8 @@ atom.extend(Class, {
 			return this;
 		},
 		readyEvent: function (name, args) {
+			initEvents(this);
+			
 			nextTick(function () {
 				name = removeOn(name);
 				this._events.$ready[name] = args || [];
@@ -979,6 +1025,8 @@ provides: Class.Options
 atom.extend(atom.Class, {
 	Options: atom.Class({
 		setOptions: function(){
+			if (!this.options) this.options = {};
+
 			var args = [{}, this.options].append(arguments);
 			var options = this.options = atom.merge.apply(null, args);
 			if (this.addEvent) for (var option in options){
@@ -1434,7 +1482,7 @@ atom.implement(String, 'safe', {
 	},
 	substitute: function(object, regexp){
 		return this.replace(regexp || substituteRE, function(match, name){
-			return (match[0] == '\\') ? match.slice(1) : (object[name] || '');
+			return (match[0] == '\\') ? match.slice(1) : (object[name] == null ? '' : object[name]);
 		});
 	},
 	replaceAll: function (find, replace) {
@@ -1442,7 +1490,7 @@ atom.implement(String, 'safe', {
 		if (type == 'regexp') {
 			return this.replace(find, function (symb) { return replace[symb]; });
 		} else if (type == 'object') {
-			var result = this
+			var result = this;
 			for (var i in find) result = result.replaceAll(i, find[i]);
 			return result;
 		}

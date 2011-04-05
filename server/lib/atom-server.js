@@ -52,11 +52,11 @@ provides: atom
 		} else throw new TypeError();
 
 		var ext = proto ? elem[prototype] : elem;
-		for (var i in from) {
+		for (var i in from) if (i != 'constructor') {
 			if (safe && i in ext) continue;
-			
+
 			if ( !implementAccessors(from, ext, i) ) {
-				ext[i] = i == 'prototype' ? from[i] : clone(from[i]);
+				ext[i] = clone(from[i]);
 			}
 		}
 		return elem;
@@ -73,14 +73,17 @@ provides: atom
 		if (item.nodeName){
 			if (item.nodeType == 1) return 'element';
 			if (item.nodeType == 3) return typeOf.textnodeRE.test(item.nodeValue) ? 'textnode' : 'whitespace';
-		} else if (item.callee && typeof item.length == 'number'){
+		} else if (item && item.callee && typeof item.length == 'number'){
 			return 'arguments';
 		}
-		return typeof item;
+		
+		var type = typeof item;
+		
+		return (type == 'object' && atom.Class && item instanceof atom.Class) ? 'class' : type;
 	};
 	typeOf.textnodeRE = /\S/;
 	typeOf.types = {};
-	['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp'].forEach(function(name) {
+	['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Class'].forEach(function(name) {
 		typeOf.types['[object ' + name + ']'] = name.toLowerCase();
 	});
 
@@ -90,6 +93,8 @@ provides: atom
 			key = to;
 			to  = null;
 		}
+		// #todo: implement with getOwnPropertyDescriptor && defineProperty
+		
 		var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key);
 
 		if ( g || s ) {
@@ -112,10 +117,8 @@ provides: atom
 			return c;
 		},
 		object: function (object) {
-			if ('clone' in object) {
-				return typeof object.clone == 'function' ?
-					object.clone() : object.clone;
-			}
+			if (typeof object.clone == 'function') return object.clone();
+			
 			var c = {};
 			for (var key in object) if (!implementAccessors(object, c, key)) {
 				c[key] = clone(object[key]);
@@ -162,10 +165,9 @@ provides: atom
 			return Array[prototype].slice.call(elem);
 		},
 		log: function () {
-			var console = win.console;
-			if (console && console.log) {
+			try {
 				return console.log[apply](console, arguments);
-			} else return false;
+			} catch (e) { return false; }
 		},
 		isAtom: function (elem) {
 			return elem && elem instanceof Atom;
@@ -173,13 +175,15 @@ provides: atom
 		implementAccessors: implementAccessors, // getter+setter
 		typeOf: typeOf,
 		clone: clone,
-		merge: merge,
-		plugins : {}
+		/** @deprecated */
+		merge: merge
 	});
 
-	var atomFactory = atom.extend(function (args) {
+	var atomFactory = function (args) {
 		return Atom[apply](this, args);
-	}, { prototype : Atom[prototype] });
+	};
+	atomFactory[prototype] = Atom[prototype];
+
 
 	// JavaScript 1.8.5 Compatiblity
 	atom.implement(Function, 'safe', {
@@ -219,389 +223,6 @@ provides: atom
 		}
 	});
 })();
-
-/*
----
-
-name: "Class"
-
-description: "Contains the Class Function for easily creating, extending, and implementing reusable Classes."
-
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
-
-requires:
-	- atom
-
-inspiration:
-  - "[MooTools](http://mootools.net)"
-
-provides: Class
-
-...
-*/
-
-
-(function(atom){
-
-var typeOf = atom.typeOf,
-	extend = atom.extend,
-	accessors = atom.implementAccessors,
-	prototype = 'prototype';
-
-var Class = function (params) {
-	if (Class.$prototyping) {
-		reset(this);
-		return this;
-	}
-
-	if (typeOf(params) == 'function') params = {initialize: params};
-
-	var newClass = function(){
-		reset(this);
-		if (newClass.$prototyping) return this;
-		return this.initialize ? this.initialize.apply(this, arguments) : this;
-	};
-	extend(newClass, Class);
-	newClass[prototype] = getInstance(Class);
-	newClass
-		.implement(params, false)
-		.reserved(true, {
-			parent: parent,
-			self  : newClass
-		})
-		.reserved({
-			factory : (function() {
-				// Должно быть в конце, чтобы успел создаться прототип
-				function F(args) { return newClass.apply(this, args); }
-				F[prototype] = newClass[prototype];
-				return function(args) { return new F(args || []); }
-			})()
-		});
-
-	return newClass;
-};
-
-var parent = function(){
-	if (!this.$caller) throw new Error('The method «parent» cannot be called.');
-	var name = this.$caller.$name,
-		parent = this.$caller.$owner.parent,
-		previous = parent && parent[prototype][name];
-	if (!previous) throw new Error('The method «' + name + '» has no parent.');
-	return previous.apply(this, arguments);
-};
-
-var reset = function(object){
-	for (var key in object) if (!accessors(object, key)) {
-		var value = object[key];
-		if (value && typeof value == 'object') {
-			if ('clone' in value) {
-				object[key] = (typeof value.clone == 'function') ?
-					value.clone() : value.clone;
-			} else if (typeOf(value) == 'object') {
-				var F = function(){};
-				F[prototype] = value;
-				object[key] = reset(new F);
-			}
-		} else {
-			object[key] = value;
-		}
-	}
-	return object;
-};
-
-var wrap = function(self, key, method){
-	// if method is already wrapped
-	if (method.$origin) method = method.$origin;
-	
-	var wrapper = extend(function(){
-		if (method.$protected && !this.$caller) throw new Error('The method «' + key + '» is protected.');
-		var current = this.$caller;
-		this.$caller = wrapper;
-		var result = method.apply(this, arguments);
-		this.$caller = current;
-		return result;
-	}, {$owner: self, $origin: method, $name: key});
-	
-	return wrapper;
-};
-
-var lambda = function (value) { return function () { return value; }};
-
-extend(Class, {
-	extend: function (name, fn) {
-		if (typeof name == 'string') {
-			var object = {};
-			object[name] = fn;
-		} else {
-			object = name;
-		}
-
-		for (var i in object) if (!accessors(object, this, i)) {
-			 this[i] = object[i];
-		}
-		return this;
-	},
-	implement: function(name, fn, retain){
-		if (typeof name == 'string') {
-			var params = {};
-			params[name] = fn;
-		} else {
-			params = name;
-			retain = fn;
-		}
-
-		for (var key in params) if (!accessors(params, this[prototype], key)) {
-			var value = params[key];
-
-			if (Class.Mutators.hasOwnProperty(key)){
-				value = Class.Mutators[key].call(this, value);
-				if (value == null) continue;
-			}
-
-			if (typeOf(value) == 'function'){
-				if (value.$hidden == 'next') {
-					value.$hidden = true
-				} else if (value.$hidden) {
-					continue;
-				}
-				this[prototype][key] = (retain) ? value : wrap(this, key, value);
-			} else {
-				atom.merge(this[prototype], key, value);
-			}
-		}
-		return this;
-	},
-	mixin: function () {
-		atom.toArray(arguments).forEach(function (item) {
-			this.implement(getInstance(item));
-		}.bind(this));
-		return this;
-	},
-	reserved: function (toProto, props) { // use carefull !!
-		if (arguments.length == 1) {
-			props = toProto;
-			toProto = false;
-		}
-		var target = toProto ? this[prototype] : this;
-		for (var name in props) {
-			target.__defineGetter__(name, lambda(props[name]));
-		}
-		return this;
-	},
-	isInstance: function (object) {
-		return object instanceof this;
-	}
-});
-
-var getInstance = function(klass){
-	klass.$prototyping = true;
-	var proto = new klass;
-	delete klass.$prototyping;
-	return proto;
-};
-
-extend(Class, {
-	Mutators: {
-		Extends: function(parent){
-			if (parent == null) throw new TypeError('Cant extends from null');
-			this.extend(parent).reserved({ parent: parent });
-			this[prototype] = getInstance(parent);
-		},
-
-		Implements: function(items){
-			this.mixin.apply(this, items);
-		},
-
-		Static: function(properties) {
-			this.extend(properties);
-		}
-	},
-	abstractMethod: function (name) {
-		throw new Error('Abstract Method «' + this.$caller.$name + '» called');
-	},
-	protectedMethod: function (fn) {
-		return extend(fn, { $protected: true });
-	},
-	privateMethod: function (fn) {
-		return extend(fn, { $hidden: 'next' });
-	}
-});
-
-extend({ Class: Class });
-
-})(atom);
-
-/*
----
-
-name: "Class.Events"
-
-description: ""
-
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
-
-requires:
-	- atom
-	- Class
-
-inspiration:
-  - "[MooTools](http://mootools.net)"
-
-provides: Class.Events
-
-...
-*/
-
-new function () {
-
-var Class = atom.Class;
-
-var fire = function (name, fn, args, onfinish) {
-	var result = fn.apply(this, Array.from(args || []));
-	if (typeof result == 'string' && result.toLowerCase() == 'removeevent') {
-		onfinish.push(this.removeEvent.context(this, [name, fn]));
-	}
-};
-
-var removeOn = function(string){
-	return string.replace(/^on([A-Z])/, function(full, first){
-		return first.toLowerCase();
-	});
-};
-
-var nextTick = function (fn) {
-	nextTick.fn.push(fn);
-	if (!nextTick.id) {
-		nextTick.id = function () {
-			nextTick.reset().invoke();
-		}.delay(1);
-	}
-};
-nextTick.reset = function () {
-	var fn = nextTick.fn;
-	nextTick.fn = [];
-	nextTick.id = 0;
-	return fn;
-};
-nextTick.reset();
-
-atom.extend(Class, {
-	Events: Class({
-		events: { $ready: {} },
-
-		addEvent: function(name, fn) {
-			var i, l, onfinish = [];
-			if (arguments.length == 1 && typeof name != 'string') {
-				for (i in name) {
-					this.addEvent(i, name[i]);
-				}
-			} else if (Array.isArray(name)) {
-				for (i = 0, l = name.length; i < l; i++) {
-					this.addEvent(name[i], fn);
-				}
-			} else {
-				name = removeOn(name);
-				if (name == '$ready') {
-					throw new TypeError('Event name «$ready» is reserved');
-				} else if (!fn) {
-					throw new TypeError('Function is empty');
-				} else {
-					Object.ifEmpty(this.events, name, []);
-					
-					this.events[name].include(fn);
-
-					var ready = this.events.$ready[name];
-					if (ready) fire.apply(this, [name, fn, ready, onfinish]);
-						onfinish.invoke();
-					}
-				}
-			return this;
-		},
-		removeEvent: function (name, fn) {
-			if (arguments.length == 1 && typeof name != 'string') {
-				for (i in name) {
-					this.addEvent(i, name[i]);
-				}
-			} else if (Array.isArray(name)) {
-				for (var i = name.length; i--;) {
-					this.removeEvent(name[i], fn);
-				}
-				return this;
-			} else {
-				name = removeOn(name);
-				if (name == '$ready') {
-					throw new TypeError('Event name «$ready» is reserved');
-				}
-				if (arguments.length == 1) {
-					this.events[name] = [];
-				} else if (name in this.events) {
-					this.events[name].erase(fn);
-				}
-			}
-			return this;
-		},
-
-		fireEvent: function (name, args) {
-			name = removeOn(name);
-			var funcs = this.events[name];
-			if (funcs) {
-				var onfinish = [],
-					l = funcs.length,
-					i = 0;
-				for (;i < l; i++) fire.call(this, name, funcs[i], args || [], onfinish);
-				onfinish.invoke();
-			}
-			return this;
-		},
-		readyEvent: function (name, args) {
-			nextTick(function () {
-				name = removeOn(name);
-				this.events.$ready[name] = args || [];
-				this.fireEvent(name, args || []);
-			}.context(this));
-			return this;
-		}
-	})
-});
-
-};
-
-/*
----
-
-name: "Class.Options"
-
-description: ""
-
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
-
-requires:
-	- atom
-	- Class
-
-inspiration:
-  - "[MooTools](http://mootools.net)"
-
-provides: Class.Options
-
-...
-*/
-
-atom.extend(atom.Class, {
-	Options: atom.Class({
-		setOptions: function(){
-			var args = [{}, this.options].append(arguments);
-			var options = this.options = atom.merge.apply(null, args);
-			if (this.addEvent) for (var option in options){
-				if (atom.typeOf(options[option]) == 'function' && (/^on[A-Z]/).test(option)) {
-					this.addEvent(option, options[option]);
-					delete options[option];
-				}
-			}
-			return this;
-		}
-	})
-});
 
 /*
 ---
@@ -1025,7 +646,7 @@ new function () {
 var substituteRE = /\\?\{([^{}]+)\}/g,
 	safeHtmlRE = /[<'&">]/g,
 	UID = Date.now();
-	
+
 String.uniqueID = function () {
 	return (UID++).toString(36);
 };
@@ -1044,8 +665,8 @@ atom.implement(String, 'safe', {
 		return new Array(times + 1).join(this);
 	},
 	substitute: function(object, regexp){
-		return this.replace(regexp || (substituteRE), function(match, name){
-			return (match[0] == '\\') ? match.slice(1) : (object[name] || '');
+		return this.replace(regexp || substituteRE, function(match, name){
+			return (match[0] == '\\') ? match.slice(1) : (object[name] == null ? '' : object[name]);
 		});
 	},
 	replaceAll: function (find, replace) {
@@ -1053,8 +674,9 @@ atom.implement(String, 'safe', {
 		if (type == 'regexp') {
 			return this.replace(find, function (symb) { return replace[symb]; });
 		} else if (type == 'object') {
-			for (var i in find) this.replaceAll(i, find[i]);
-			return this;
+			var result = this;
+			for (var i in find) result = result.replaceAll(i, find[i]);
+			return result;
 		}
 		return this.split(find).join(replace);
 	},
@@ -1073,3 +695,417 @@ atom.implement(String, 'safe', {
 }();
 
 
+/*
+---
+
+name: "Class"
+
+description: "Contains the Class Function for easily creating, extending, and implementing reusable Classes."
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+requires:
+	- atom
+
+inspiration:
+  - "[MooTools](http://mootools.net)"
+
+provides: Class
+
+...
+*/
+
+
+(function(atom){
+
+var typeOf = atom.typeOf,
+	extend = atom.extend,
+	accessors = atom.implementAccessors,
+	prototype = 'prototype',
+	lambda    = function (value) { return function () { return value; }};
+
+var Class = function (params) {
+	if (Class.$prototyping) {
+		return this;
+	}
+
+	if (typeOf(params) == 'function') params = {initialize: params};
+
+	var Constructor = function(){
+		if (Constructor.$prototyping) return this;
+		return this.initialize ? this.initialize.apply(this, arguments) : this;
+	};
+	extend(Constructor, Class);
+	Constructor[prototype] = getInstance(Class);
+	Constructor
+		.implement(params, false)
+		.reserved(true, {
+			parent: parent,
+			self  : Constructor
+		})
+		.reserved({
+			factory : (function() {
+				// Должно быть в конце, чтобы успел создаться прототип
+				function Factory(args) { return Constructor.apply(this, args); }
+				Factory[prototype] = Constructor[prototype];
+				return function(args) { return new Factory(args || []); }
+			})()
+		});
+
+	return Constructor;
+};
+
+var parent = function(){
+	if (!this.$caller) throw new Error('The method «parent» cannot be called.');
+	var name = this.$caller.$name,
+		parent = this.$caller.$owner.parent,
+		previous = parent && parent[prototype][name];
+	if (!previous) throw new Error('The method «' + name + '» has no parent.');
+	return previous.apply(this, arguments);
+};
+
+var wrap = function(self, key, method){
+	// if method is already wrapped
+	if (method.$origin) method = method.$origin;
+	
+	var wrapper = extend(function(){
+		if (method.$protected && !this.$caller) throw new Error('The method «' + key + '» is protected.');
+		var current = this.$caller;
+		this.$caller = wrapper;
+		var result = method.apply(this, arguments);
+		this.$caller = current;
+		return result;
+	}, {$owner: self, $origin: method, $name: key});
+	
+	return wrapper;
+};
+
+extend(Class, {
+	extend: function (name, fn) {
+		if (typeof name == 'string') {
+			var object = {};
+			object[name] = fn;
+		} else {
+			object = name;
+		}
+
+		for (var i in object) if (!accessors(object, this, i)) {
+			 this[i] = object[i];
+		}
+		return this;
+	},
+	implement: function(name, fn, retain){
+		if (typeof name == 'string') {
+			var params = {};
+			params[name] = fn;
+		} else {
+			params = name;
+			retain = fn;
+		}
+
+		for (var key in params) if (!accessors(params, this[prototype], key)) {
+			var value = params[key];
+
+			if (Class.Mutators.hasOwnProperty(key)){
+				value = Class.Mutators[key].call(this, value);
+				if (value == null) continue;
+			}
+
+			if (typeOf(value) == 'function'){
+				if (value.$hidden == 'next') {
+					value.$hidden = true
+				} else if (value.$hidden) {
+					continue;
+				}
+				this[prototype][key] = (retain) ? value : wrap(this, key, value);
+			} else {
+				atom.merge(this[prototype], key, value);
+			}
+		}
+		return this;
+	},
+	mixin: function () {
+		atom.toArray(arguments).forEach(function (item) {
+			this.implement(getInstance(item));
+		}.bind(this));
+		return this;
+	},
+	reserved: function (toProto, props) { // use carefull !!
+		if (arguments.length == 1) {
+			props = toProto;
+			toProto = false;
+		}
+		var target = toProto ? this[prototype] : this;
+		for (var name in props) {
+			target.__defineGetter__(name, lambda(props[name]));
+		}
+		return this;
+	},
+	isInstance: function (object) {
+		return object instanceof this;
+	}
+});
+
+var getInstance = function(klass){
+	klass.$prototyping = true;
+	var proto = new klass;
+	delete klass.$prototyping;
+	return proto;
+};
+
+extend(Class, {
+	Mutators: {
+		Extends: function(parent){
+			if (parent == null) throw new TypeError('Cant extends from null');
+			this.extend(parent).reserved({ parent: parent });
+			this[prototype] = getInstance(parent);
+		},
+
+		Implements: function(items){
+			this.mixin.apply(this, items);
+		},
+
+		Static: function(properties) {
+			this.extend(properties);
+		}
+	},
+	abstractMethod: function (name) {
+		throw new Error('Abstract Method «' + this.$caller.$name + '» called');
+	},
+	protectedMethod: function (fn) {
+		return extend(fn, { $protected: true });
+	},
+	hiddenMethod: function (fn) {
+		return extend(fn, { $hidden: 'next' });
+	}
+});
+
+extend({ Class: Class });
+
+})(atom);
+
+/*
+---
+
+name: "Class.Events"
+
+description: ""
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+requires:
+	- atom
+	- Class
+
+inspiration:
+  - "[MooTools](http://mootools.net)"
+
+provides: Class.Events
+
+...
+*/
+
+new function () {
+
+var Class = atom.Class;
+
+var fire = function (name, fn, args, onfinish) {
+	var result = fn.apply(this, Array.from(args || []));
+	if (typeof result == 'string' && result.toLowerCase() == 'removeevent') {
+		onfinish.push(this.removeEvent.context(this, [name, fn]));
+	}
+};
+
+var removeOn = function(string){
+	return (string || '').replace(/^on([A-Z])/, function(full, first){
+		return first.toLowerCase();
+	});
+};
+
+var initEvents = function (object) {
+	if (!object._events) object._events = { $ready: {} };
+};
+
+var nextTick = function (fn) {
+	nextTick.fn.push(fn);
+	if (!nextTick.id) {
+		nextTick.id = function () {
+			nextTick.reset().invoke();
+		}.delay(1);
+	}
+};
+nextTick.reset = function () {
+	var fn = nextTick.fn;
+	nextTick.fn = [];
+	nextTick.id = 0;
+	return fn;
+};
+nextTick.reset();
+
+atom.extend(Class, {
+	Events: Class({
+		addEvent: function(name, fn) {
+			initEvents(this);
+
+			var i, l, onfinish = [];
+			if (arguments.length == 1 && typeof name != 'string') {
+				for (i in name) {
+					this.addEvent(i, name[i]);
+				}
+			} else if (Array.isArray(name)) {
+				for (i = 0, l = name.length; i < l; i++) {
+					this.addEvent(name[i], fn);
+				}
+			} else {
+				name = removeOn(name);
+				if (name == '$ready') {
+					throw new TypeError('Event name «$ready» is reserved');
+				} else if (!fn) {
+					throw new TypeError('Function is empty');
+				} else {
+					Object.ifEmpty(this._events, name, []);
+
+					this._events[name].include(fn);
+
+					var ready = this._events.$ready[name];
+					if (ready) fire.apply(this, [name, fn, ready, onfinish]);
+					onfinish.invoke();
+				}
+			}
+			return this;
+		},
+		removeEvent: function (name, fn) {
+			initEvents(this);
+
+			if (arguments.length == 1 && typeof name != 'string') {
+				for (i in name) {
+					this.addEvent(i, name[i]);
+				}
+			} else if (Array.isArray(name)) {
+				for (var i = name.length; i--;) {
+					this.removeEvent(name[i], fn);
+				}
+				return this;
+			} else {
+				name = removeOn(name);
+				if (name == '$ready') {
+					throw new TypeError('Event name «$ready» is reserved');
+				}
+				if (arguments.length == 1) {
+					this._events[name] = [];
+				} else if (name in this._events) {
+					this._events[name].erase(fn);
+				}
+			}
+			return this;
+		},
+		isEventAdded: function (name) {
+			initEvents(this);
+			
+			var e = this._events[name];
+			return !!(e && e.length);
+		},
+		fireEvent: function (name, args) {
+			initEvents(this);
+			
+			name = removeOn(name);
+			var funcs = this._events[name];
+			if (funcs) {
+				var onfinish = [],
+					l = funcs.length,
+					i = 0;
+				for (;i < l; i++) fire.call(this, name, funcs[i], args || [], onfinish);
+				onfinish.invoke();
+			}
+			return this;
+		},
+		readyEvent: function (name, args) {
+			initEvents(this);
+			
+			nextTick(function () {
+				name = removeOn(name);
+				this._events.$ready[name] = args || [];
+				this.fireEvent(name, args || []);
+			}.context(this));
+			return this;
+		}
+	})
+});
+
+};
+
+/*
+---
+
+name: "Class.Options"
+
+description: ""
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+requires:
+	- atom
+	- Class
+
+inspiration:
+  - "[MooTools](http://mootools.net)"
+
+provides: Class.Options
+
+...
+*/
+
+atom.extend(atom.Class, {
+	Options: atom.Class({
+		setOptions: function(){
+			if (!this.options) this.options = {};
+
+			var args = [{}, this.options].append(arguments);
+			var options = this.options = atom.merge.apply(null, args);
+			if (this.addEvent) for (var option in options){
+				if (atom.typeOf(options[option]) == 'function' && (/^on[A-Z]/).test(option)) {
+					this.addEvent(option, options[option]);
+					delete options[option];
+				}
+			}
+			return this;
+		}
+	})
+});
+
+/*
+---
+
+name: "Class.Mutators.Generators"
+
+description: "Provides Generators mutator"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+authors:
+	- "Shock <shocksilien@gmail.com>"
+
+requires:
+	- atom
+	- Class
+
+provides: Class.Mutators.Generators
+
+...
+*/
+
+new function () {
+
+var getter = function (key, fn) {
+	return function() {
+		var pr = '_' + key, obj = this;
+		return pr in obj ? obj[pr] : (obj[pr] = fn.call(obj));
+	};
+};
+
+atom.Class.Mutators.Generators = function(properties) {
+	for (var i in properties) this.prototype.__defineGetter__(i, getter(i, properties[i]));
+};
+
+};
+ 

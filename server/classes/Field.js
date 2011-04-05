@@ -1,9 +1,13 @@
 
 
 GLOBAL.Field = atom.Class({
-	_units: {},
 
 	initialize: function (width, height) {
+		this._units = {};
+		this._shots = [];
+		this.links  = [];
+		this.barriers = [];
+		
 		this.width  = width;
 		this.height = height;
 		this.rect   = new Rectangle(0,0,width,height);
@@ -16,7 +20,6 @@ GLOBAL.Field = atom.Class({
 		}.periodical(40, this));
 	},
 
-	_shots : [],
 	get shots () {
 		this._shots = this._shots.filter(function (shot) {
 			return shot.dead > Date.now();
@@ -98,8 +101,7 @@ GLOBAL.Field = atom.Class({
 			Number.random(0, this.height)
 		);
 	},
-	
-	barriers: [],
+
 	_barriersPlain: null,
 	get barriesPlain () {
 		if (!this._barriersPlain) {
@@ -132,8 +134,7 @@ GLOBAL.Field = atom.Class({
 		this.links.invoke('send', data);
 		return this;
 	},
-	
-	links: [],
+
 	createLink: function (client) {
 		var field = this,
 		    unit  = field.createUnit(client.sessionId),

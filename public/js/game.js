@@ -1,7 +1,7 @@
 
 LibCanvas.extract();
 
-atom(function () {
+atom.dom(function () {
 	
 	var field = new Field({
 		element: '#jet',

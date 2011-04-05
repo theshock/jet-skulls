@@ -6,14 +6,15 @@ var Unit = atom.Class({
 	Implements: [Drawable],
 
 	zIndex: 16,
-	
-	healthShift: new Point(0, 15),
+
 	healthRectWidth: 30,
 	healthRectHeight: 4,
 
 	isPlayer: false,
-	position: new Point(0,0),
 	initialize: function (field, data) {
+		this.healthShift = new Point(0, 15);
+		this.position = new Point(0,0);
+
 		this.field    = field;
 		this.trace    = new Trace();
 		this.isPlayer = !!data.isPlayer;

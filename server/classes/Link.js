@@ -33,5 +33,5 @@ GLOBAL.Link = atom.Class({
 	},
 	_onDisconnect: function () {
 		this.fireEvent('disconnect', arguments);
-	},
+	}
 });

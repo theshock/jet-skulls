@@ -9,7 +9,7 @@ var Controls = atom.Class({
 
 		var shot = false, mouse = lc.mouse.point;
 
-		atom(lc.origElem).bind({
+		atom.dom(lc.origElem).bind({
 			mousedown: function () { shot = true; },
 			mouseup  : function () { shot = false; }
 		});

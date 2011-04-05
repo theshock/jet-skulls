@@ -36,7 +36,7 @@ var LibCanvas = global.LibCanvas = atom.Class({
 				width   = width.width
 			}
 			
-			var canvas = atom()
+			var canvas = atom.dom()
 				.create("canvas", {
 					width  : width,
 					height : height
@@ -83,7 +83,7 @@ var LibCanvas = global.LibCanvas = atom.Class({
 	}
 });
 
-atom(function () {
+atom.dom && atom.dom(function () {
 	LibCanvas.invoker.invoke();
 });
 
@@ -132,7 +132,8 @@ LibCanvas.Geometry = atom.Class({
 	move : function (distance, reverse) {
 		this.fireEvent('move', [this.invertDirection(distance, reverse)]);
 		return this;
-	}
+	},
+	toString: Function.lambda('[object LibCanvas.Geometry]')
 });
 
 /*
@@ -298,10 +299,8 @@ var Point = LibCanvas.Point = atom.Class({
 
 		return this.parent(distance, false);
 	},
-	moveTo : function (newCoord, speed) {
-		return speed ?
-			this.animateMoveTo(newCoord, speed) :
-			this.move(this.diff(newCoord));
+	moveTo : function (newCoord) {
+		return this.move(this.diff(newCoord));
 	},
 	angleTo : function (point) {
 		var diff = Point.from(arguments).diff(this);
@@ -350,26 +349,6 @@ var Point = LibCanvas.Point = atom.Class({
 	getNeighbour : function (dir) {
 		return this.clone().move(shifts[dir]);
 	},
-	movingInterval: 0,
-	animateMoveTo : function (to, speed) {
-		this.movingInterval.stop();
-		this.movingInterval = function () {
-			var move = {}, pixelsPerFn = speed / 20;
-			var diff = this.diff(to);
-			var dist = this.distanceTo(to);
-			if (dist > pixelsPerFn) {
-				move.x = diff.x * (pixelsPerFn / dist);
-				move.y = diff.y * (pixelsPerFn / dist);
-			} else {
-				move.x = diff.x;
-				move.y = diff.y;
-				this.movingInterval.stop();
-				this.fireEvent('stopMove');
-			}
-			this.move(move);
-		}.periodical(20, this);
-		return this;
-	},
 	equals : function (to, accuracy) {
 		to = Point.from(to);
 		return accuracy == null ? (to.x == this.x && to.y == this.y) :
@@ -381,13 +360,18 @@ var Point = LibCanvas.Point = atom.Class({
 			y: this.y
 		};
 	},
-	snapToPixel: function (minus) {
-		var shift = minus ? -0.5 : 0.5;
-		return this.clone().move({ x: shift, y: shift });
+	snapToPixel: function () {
+		this.x += 1 - (this.x - this.x.floor()) - 0.5;
+		this.y += 1 - (this.y - this.y.floor()) - 0.5;
+		return this;
 	},
 	clone : function () {
 		return new Point(this);
-	}
+	},
+	dump: function () {
+		return '[Point(' + this.x + ', ' + this.y + ')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Point]')
 });
 
 };
@@ -439,7 +423,7 @@ LibCanvas.Shape = atom.Class({
 		return this.move({ x : 0, y : y - this.y });
 	},
 	getCenter : function () {
-		return new Point(
+		return new LibCanvas.Point(
 			(this.from.x + this.to.x) / 2,
 			(this.from.y + this.to.y) / 2
 		);
@@ -458,7 +442,13 @@ LibCanvas.Shape = atom.Class({
 	},
 	getPoints : function () {
 		return { from : this.from, to : this.to };
-	}
+	},
+	dump: function (shape) {
+		if (!shape) return this.toString();
+		var p = function (p) { return '[' + p.x + ', ' + p.y + ']'; };
+		return '[shape ' + shape + '(from'+p(this.from)+', to'+p(this.to)+')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Shape]')
 });
 
 /*
@@ -485,14 +475,11 @@ provides: Shapes.Rectangle
 
 new function () {
 
-var Point = LibCanvas.Point,
-	math = Math,
-	min = math.min,
-	max = math.max,
-	isReal = Object.isReal,
-	random = Number.random;
+var Point  = LibCanvas.Point,
+	math   = Math,
+	random = Number.random,
 
-LibCanvas.namespace('Shapes').Rectangle = atom.Class({
+Rectangle = LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 	Extends: LibCanvas.Shape,
 	set : function () {
 		var a = Array.pickFrom(arguments);
@@ -571,16 +558,22 @@ LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 		point   = Point.from(arguments);
 		padding = padding || 0;
 		return point.x != null && point.y != null
-			&& point.x.between(min(this.from.x, this.to.x) + padding, max(this.from.x, this.to.x) - padding, 1)
-			&& point.y.between(min(this.from.y, this.to.y) + padding, max(this.from.y, this.to.y) - padding, 1);
+			&& point.x.between(math.min(this.from.x, this.to.x) + padding, math.max(this.from.x, this.to.x) - padding, 1)
+			&& point.y.between(math.min(this.from.y, this.to.y) + padding, math.max(this.from.y, this.to.y) - padding, 1);
+	},
+	moveTo: function (rect) {
+		rect = Rectangle.from(arguments);
+		this.from.moveTo(rect.from);
+		this.  to.moveTo(rect.to);
+		return this;
 	},
 	draw : function (ctx, type) {
 		// fixed Opera bug - cant drawing rectangle with width or height below zero
 		ctx.original(type + 'Rect', [
-			min(this.from.x, this.to.x),
-			min(this.from.y, this.to.y),
-			this.getWidth() .abs(),
-			this.getHeight().abs()
+			math.min(this.from.x, this.to.x),
+			math.min(this.from.y, this.to.y),
+			this.width .abs(),
+			this.height.abs()
 		]);
 		return this;
 	},
@@ -598,20 +591,29 @@ LibCanvas.namespace('Shapes').Rectangle = atom.Class({
 	getRandomPoint : function (margin) {
 		margin = margin || 0;
 		return new Point(
-			random(margin, this.getWidth()  - margin),
-			random(margin, this.getHeight() - margin)
+			random(margin, this.width  - margin),
+			random(margin, this.height - margin)
 		);
 	},
 	translate : function (point, fromRect) {
 		var diff = fromRect.from.diff(point);
 		return new Point({
-			x : (diff.x / fromRect.getWidth() ) * this.getWidth(),
-			y : (diff.y / fromRect.getHeight()) * this.getHeight()
+			x : (diff.x / fromRect.width ) * this.width,
+			y : (diff.y / fromRect.height) * this.height
 		});
-	}
+	},
+	snapToPixel: function () {
+		this.from.snapToPixel();
+		this.to.snapToPixel();
+		return this;
+	},
+	dump: function () {
+		return this.parent('Rectangle');
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Rectangle]')
 });
 
-}();
+};
 
 /*
 ---
@@ -709,13 +711,15 @@ LibCanvas.namespace('Shapes').Circle = atom.Class({
 	},
 	getPoints : function () {
 		return { center : this.center };
-	}
+	},
+	dump: function () {
+		return '[shape Circle(center['+this.center.x+', '+this.center.y+'], '+this.radius+')]';
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Circle]')
 });
 
 }();
- 
 
- 
 /*
 ---
 
@@ -814,7 +818,13 @@ LibCanvas.namespace('Shapes').Line = atom.Class({
 		ctx.moveTo(this.from).lineTo(this.to);
 		if (!noWrap) ctx.closePath();
 		return ctx;
-	}
+	},
+	dump: function () {
+		return this.parent('Line');
+	},
+	toString: Function.lambda('[object LibCanvas.Shapes.Line]')
 });
 
 };
+
+ 

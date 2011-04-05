@@ -9,10 +9,26 @@
 		<script src="js/lib/atom.js"></script>
 		<script src="js/lib/libcanvas.js"></script>
 
+		<!-- Start -->
+		<script src="js/editor.js"></script>
+		
+		<!-- Classes -->
+		<script src="js/editor/Editor.js"></script>
+		<script src="js/editor/Layer.js"></script>
+		<script src="js/editor/Landscape.js"></script>
+		<script src="js/editor/Collisions.js"></script>
+		<script src="js/editor/Grid.js"></script>
+		<script src="js/editor/Mouse.js"></script>
 	</head>
 	<body>
 		<div id="jet-editor">
-			<canvas></canvas>
+			<div class="menu">
+				<button>Move</button>
+				<img src="/images/landscape-sprites.png" alt="" id="sprites" />
+			</div>
+			<div class="screen">
+				<canvas></canvas>
+			</div>
 		</div>
 	</body>
 </html>
