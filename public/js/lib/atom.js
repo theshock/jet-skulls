@@ -20,59 +20,45 @@ provides: atom
 ...
 */
 
-(function () {
+(function (Object, Array) {
 	var prototype = 'prototype',
-	    apply = 'apply',
-		toString = Object[prototype].toString;
+	    apply     = 'apply',
+		toString  = Object[prototype].toString,
+		global    = (this.window || GLOBAL),
+		slice     = [].slice,
+		FuncProto = Function[prototype];
 
-
-	var Atom = function () {
-		return atom.initialize[apply](this, arguments);
+	var atom = global.atom = function () {
+		if (atom.initialize) return atom.initialize[apply](this, arguments);
 	};
 
-	var atom = (this.window || GLOBAL).atom = function () {
-		return new atomFactory(arguments);
-	};
+	var innerExtend = function (proto) {
+		return function (elem, from) {
+			if (from == null) {
+				from = elem;
+				elem = atom;
+			}
 
-	var innerExtend = function (args, Default, proto) {
-		var L = args.length;
-		if (L === 3) {
-			var
-			elem = args[0],
-			safe = args[1],
-			from = args[2];
-		} else if (L === 2) {
-			elem = args[0];
-			safe = false;
-			from = args[1];
-		} else if (L === 1) {
-			elem = Default;
-			safe = false;
-			from = args[0];
-		} else throw new TypeError();
+			var ext = proto ? elem[prototype] : elem,
+			    accessors = atom.accessors && atom.accessors.inherit;
+			for (var i in from) if (i != 'constructor') {
+				if ( accessors && accessors(from, ext, i) ) continue;
 
-		var ext = proto ? elem[prototype] : elem;
-		for (var i in from) if (i != 'constructor') {
-			if (safe && i in ext) continue;
-
-			if ( !implementAccessors(from, ext, i) ) {
 				ext[i] = clone(from[i]);
 			}
-		}
-		return elem;
+			return elem;
+		};
 	};
 
 	var typeOf = function (item) {
 		if (item == null) return 'null';
-
-		if (item instanceof Atom) return 'atom';
 
 		var string = toString.call(item);
 		for (var i in typeOf.types) if (i == string) return typeOf.types[i];
 
 		if (item.nodeName){
 			if (item.nodeType == 1) return 'element';
-			if (item.nodeType == 3) return typeOf.textnodeRE.test(item.nodeValue) ? 'textnode' : 'whitespace';
+			if (item.nodeType == 3) return /\S/.test(item.nodeValue) ? 'textnode' : 'whitespace';
 		} else if (item && item.callee && typeof item.length == 'number'){
 			return 'arguments';
 		}
@@ -81,31 +67,12 @@ provides: atom
 		
 		return (type == 'object' && atom.Class && item instanceof atom.Class) ? 'class' : type;
 	};
-	typeOf.textnodeRE = /\S/;
 	typeOf.types = {};
 	['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Class'].forEach(function(name) {
 		typeOf.types['[object ' + name + ']'] = name.toLowerCase();
 	});
 
-	var implementAccessors = function (from, to, key) {
-		if (arguments.length == 2) {
-			// only for check if is accessor
-			key = to;
-			to  = null;
-		}
-		// #todo: implement with getOwnPropertyDescriptor && defineProperty
-		
-		var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key);
 
-		if ( g || s ) {
-			if (to != null) {
-				if (g) to.__defineGetter__(key, g);
-				if (s) to.__defineSetter__(key, s);
-			}
-			return true;
-		}
-		return false;
-	};
 	var clone = function (object) {
 		var type = typeOf(object);
 		return type in clone.types ? clone.types[type](object) : object;
@@ -118,111 +85,169 @@ provides: atom
 		},
 		object: function (object) {
 			if (typeof object.clone == 'function') return object.clone();
-			
-			var c = {};
-			for (var key in object) if (!implementAccessors(object, c, key)) {
+
+			var c = {}, accessors = atom.accessors && atom.accessors.inherit;
+			for (var key in object) {
+				if (accessors && accessors(object, c, key)) continue;
 				c[key] = clone(object[key]);
 			}
 			return c;
 		}
 	};
-
-	var mergeOne = function(source, key, current){
-		switch (typeOf(current)){
-			case 'object':
-				if (typeOf(source[key]) == 'object') merge(source[key], current);
-				else source[key] = clone(current);
-			break;
-			case 'array': source[key] = clone(current); break;
-			default: source[key] = current;
-		}
-		return source;
-	};
-	var merge = function(source, k, v){
-		if (typeOf(k) == 'string') return mergeOne(source, k, v);
-		
-		for (var i = 1, l = arguments.length; i < l; i++){
-			var object = arguments[i];
-			if (object) {
-				for (var key in object) if (!implementAccessors(object, source, key)) {
-					mergeOne(source, key, object[key]);
-				}
-			}
-		}
-		return source;
-	};
 	
-	var extend = atom.extend = function (elem, safe, from) {
-		return innerExtend(arguments, atom, false);
-	};
+	atom.extend = innerExtend(false);
 
-	extend({
-		initialize: function () {},
-		implement: function (elem, safe, from) {
-			return innerExtend(arguments, Atom, true);
-		},
+	atom.extend({
+		implement: innerExtend(true),
 		toArray: function (elem) {
-			return Array[prototype].slice.call(elem);
+			return slice.call(elem);
 		},
 		log: function () {
-			try {
-				return console.log[apply](console, arguments);
-			} catch (e) { return false; }
+			// ie9 bug, typeof console.log == 'object'
+			if (global.console) FuncProto[apply].call(console.log, console, arguments);
 		},
-		isAtom: function (elem) {
-			return elem && elem instanceof Atom;
-		},
-		implementAccessors: implementAccessors, // getter+setter
 		typeOf: typeOf,
-		clone: clone,
-		/** @deprecated */
-		merge: merge
+		clone: clone
 	});
-
-	var atomFactory = function (args) {
-		return Atom[apply](this, args);
-	};
-	atomFactory[prototype] = Atom[prototype];
-
 
 	// JavaScript 1.8.5 Compatiblity
-	atom.implement(Function, 'safe', {
-		// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
-		bind : function(context /*, arg1, arg2... */) {
-			'use strict';
-			if (typeof this !== 'function') throw new TypeError();
-			var proto  = Array[prototype],
-				_slice = proto.slice,
-				_concat = proto.concat,
-				_arguments = _slice.call(arguments, 1),
-				_this = this,
-				_function = function() {
-					return _this[apply](this instanceof _dummy ? this : context,
-						_concat.call(_arguments, _slice.call(arguments, 0)));
-				},
-				_dummy = function() {};
-			_dummy[prototype] = _this[prototype];
-			_function[prototype] = new _dummy();
-			return _function;
-		}
-	});
 
-	extend(Object, 'safe', {
-		// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/keys
-		keys : function(o) {
-			var result = [];
-			for(var name in o) if (o.hasOwnProperty(name)) result.push(name);
-			return result;
-		}
-	});
+	// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
+	if (!FuncProto.bind) {
+		FuncProto.bind = function(context /*, arg1, arg2... */) {
+			var args  = slice.call(arguments, 1),
+				self  = this,
+				nop   = function () {},
+				bound = function () {
+					return self[apply](
+						this instanceof nop ? this : ( context || {} ),
+						args.concat( slice.call(arguments) )
+					);
+				};
+			nop[prototype]   = self[prototype];
+			bound[prototype] = new nop();
+			return bound;
+		};
+	}
 
-	extend(Array, 'safe', {
-		// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/isArray
-		isArray : function(o) {
-			return Object[prototype].toString.call(o) === '[object Array]';
+	// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/keys
+	if (!Object.keys) {
+		Object.keys = function(obj) {
+			if (obj !== Object(obj)) throw new TypeError('Object.keys called on non-object');
+
+			var keys = [], i, has = Object[prototype].hasOwnProperty;
+			for (i in obj) if (has.call(obj, i)) keys.push(i);
+			return keys;
+		};
+	}
+
+	// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/isArray
+	if (!Array.isArray) {
+		Array.isArray = function(o) {
+			return o && toString.call(o) === '[object Array]';
+		};
+	}
+})(Object, Array);
+
+/*
+---
+
+name: "Accessors"
+
+description: "Implementing accessors"
+
+license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+
+copyright: "Copyright (c) 2010-2011 [Ponomarenko Pavel](shocksilien@gmail.com)."
+
+authors: "The AtomJS production team"
+
+requires:
+	- atom
+
+provides: accessors
+
+...
+*/
+
+(function (Object) {
+	var standard = !!Object.getOwnPropertyDescriptor, nonStandard = !!{}.__defineGetter__;
+
+	if (!standard && !nonStandard) throw new Error('Accessors are not supported');
+
+	var getAccessors = nonStandard ?
+		function (from, key, bool) {
+			var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key);
+
+			if ( g || s ) {
+				if (bool) return true;
+				return {
+					get: g,
+					set: s
+				};
+			}
+			return bool ? false : null;
+		} :
+		function (from, key, bool) {
+			var descriptor = Object.getOwnPropertyDescriptor(from, key);
+			if (!descriptor) {
+				// try to find accessors according to chain of prototypes
+				var proto = Object.getPrototypeOf(from);
+				if (proto) return getAccessors(proto, key, bool);
+			}
+
+			if (descriptor && (descriptor.set || descriptor.get) ) {
+				if (bool) return true;
+
+				return {
+					set: descriptor.set,
+					get: descriptor.get
+				};
+			}
+			return bool ? false : null;
+		}; /* getAccessors */
+
+	var setAccessors = function (object, prop, descriptor) {
+		if (descriptor) {
+			if (nonStandard) {
+				if (descriptor.get) object.__defineGetter__(prop, descriptor.get);
+				if (descriptor.set) object.__defineSetter__(prop, descriptor.set);
+			} else {
+				var desc = {
+					get: descriptor.get,
+					set: descriptor.set,
+					configurable: true,
+					enumerable: true
+				};
+				Object.defineProperty(object, prop, desc);
+			}
+		}
+		return object;
+	};
+	
+	var hasAccessors = function (object, key) {
+		return getAccessors(object, key, true);
+	};
+
+	var inheritAccessors = function (from, to, key) {
+		var a = getAccessors(from, key);
+
+		if ( a ) {
+			setAccessors(to, key, a);
+			return true;
+		}
+		return false;
+	};
+
+	atom.extend({
+		accessors: {
+			get: getAccessors,
+			set: setAccessors,
+			has: hasAccessors,
+			inherit: inheritAccessors
 		}
 	});
-})();
+})(Object);
 
 /*
 ---
@@ -235,6 +260,7 @@ license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgp
 
 requires:
 	- atom
+	- accessors
 
 inspiration:
   - "[JQuery](http://jquery.org)"
@@ -631,36 +657,35 @@ provides: uri
 
 ...
 */
-atom.extend({
-	uri: atom.extend(function (str) {
-		var	o   = atom.uri.options,
-			m   = o.parser[o.strictMode ? "strict" : "loose"].exec(str || window.location.href),
-			uri = {},
-			i   = 14;
+new function () {
 
-		while (i--) uri[o.key[i]] = m[i] || "";
+var uri = function (str) {
+	var	o   = atom.uri.options,
+		m   = o.parser.exec(str || window.location.href),
+		uri = {},
+		i   = 14;
 
-		uri[o.q.name] = {};
-		uri[o.key[12]].replace(o.q.parser, function ($0, $1, $2) {
-			if ($1) uri[o.q.name][$1] = $2;
-		});
+	while (i--) uri[o.key[i]] = m[i] || "";
 
-		return uri;
-	}, {
-		options: {
-			strictMode: false,
-			key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
-			q:   {
-				name:   "queryKey",
-				parser: /(?:^|&)([^&=]*)=?([^&]*)/g
-			},
-			parser: {
-				strict: /^(?:([^:\/?#]+):)?(?:\/\/((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?))?((((?:[^?#\/]*\/)*)([^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
-				loose:  /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/)?((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/
-			}
-		}
-	})
-});
+	uri[o.q.name] = {};
+	uri[o.key[12]].replace(o.q.parser, function ($0, $1, $2) {
+		if ($1) uri[o.q.name][$1] = $2;
+	});
+
+	return uri;
+};
+uri.options = {
+	key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
+	q:   {
+		name:   "queryKey",
+		parser: /(?:^|&)([^&=]*)=?([^&]*)/g
+	},
+	parser: /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/)?((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/
+};
+
+atom.extend({ uri: uri });
+
+};
 
 /*
 ---
@@ -673,6 +698,7 @@ license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgp
 
 requires:
 	- atom
+	- accessors
 
 inspiration:
   - "[MooTools](http://mootools.net)"
@@ -687,16 +713,14 @@ provides: Class
 
 var typeOf = atom.typeOf,
 	extend = atom.extend,
-	accessors = atom.implementAccessors,
+	accessors = atom.accessors.inherit,
 	prototype = 'prototype',
 	lambda    = function (value) { return function () { return value; }};
 
 var Class = function (params) {
-	if (Class.$prototyping) {
-		return this;
-	}
+	if (Class.$prototyping) return this;
 
-	if (typeOf(params) == 'function') params = {initialize: params};
+	if (typeOf(params) == 'function') params = { initialize: params };
 
 	var Constructor = function(){
 		if (Constructor.$prototyping) return this;
@@ -711,12 +735,11 @@ var Class = function (params) {
 			self  : Constructor
 		})
 		.reserved({
-			factory : (function() {
-				// Должно быть в конце, чтобы успел создаться прототип
+			factory : new function() {
 				function Factory(args) { return Constructor.apply(this, args); }
 				Factory[prototype] = Constructor[prototype];
 				return function(args) { return new Factory(args || []); }
-			})()
+			}
 		});
 
 	return Constructor;
@@ -724,8 +747,8 @@ var Class = function (params) {
 
 var parent = function(){
 	if (!this.$caller) throw new Error('The method «parent» cannot be called.');
-	var name = this.$caller.$name,
-		parent = this.$caller.$owner.parent,
+	var name     = this.$caller.$name,
+		parent   = this.$caller.$owner.parent,
 		previous = parent && parent[prototype][name];
 	if (!previous) throw new Error('The method «' + name + '» has no parent.');
 	return previous.apply(this, arguments);
@@ -735,14 +758,17 @@ var wrap = function(self, key, method){
 	// if method is already wrapped
 	if (method.$origin) method = method.$origin;
 	
-	var wrapper = extend(function(){
+	var wrapper = function() {
 		if (method.$protected && !this.$caller) throw new Error('The method «' + key + '» is protected.');
 		var current = this.$caller;
 		this.$caller = wrapper;
 		var result = method.apply(this, arguments);
 		this.$caller = current;
 		return result;
-	}, {$owner: self, $origin: method, $name: key});
+	};
+	wrapper.$owner  = self;
+	wrapper.$origin = method;
+	wrapper.$name   = key;
 	
 	return wrapper;
 };
@@ -770,23 +796,25 @@ extend(Class, {
 			retain = fn;
 		}
 
-		for (var key in params) if (!accessors(params, this[prototype], key)) {
-			var value = params[key];
+		for (var key in params) {
+			if (!accessors(params, this[prototype], key)) {
+				var value = params[key];
 
-			if (Class.Mutators.hasOwnProperty(key)){
-				value = Class.Mutators[key].call(this, value);
-				if (value == null) continue;
-			}
-
-			if (typeOf(value) == 'function'){
-				if (value.$hidden == 'next') {
-					value.$hidden = true
-				} else if (value.$hidden) {
-					continue;
+				if (Class.Mutators.hasOwnProperty(key)){
+					value = Class.Mutators[key].call(this, value);
+					if (value == null) continue;
 				}
-				this[prototype][key] = (retain) ? value : wrap(this, key, value);
-			} else {
-				atom.merge(this[prototype], key, value);
+
+				if (typeOf(value) == 'function'){
+					if (value.$hidden == 'next') {
+						value.$hidden = true
+					} else if (value.$hidden) {
+						continue;
+					}
+					this[prototype][key] = (retain) ? value : wrap(this, key, value);
+				} else {
+					this[prototype][key] = atom.clone(value);
+				}
 			}
 		}
 		return this;
@@ -797,7 +825,7 @@ extend(Class, {
 		}.bind(this));
 		return this;
 	},
-	reserved: function (toProto, props) { // use carefull !!
+	reserved: function (toProto, props) { // use careful !!
 		if (arguments.length == 1) {
 			props = toProto;
 			toProto = false;
@@ -836,7 +864,7 @@ extend(Class, {
 			this.extend(properties);
 		}
 	},
-	abstractMethod: function (name) {
+	abstractMethod: function () {
 		throw new Error('Abstract Method «' + this.$caller.$name + '» called');
 	},
 	protectedMethod: function (fn) {
@@ -1022,22 +1050,29 @@ provides: Class.Options
 ...
 */
 
-atom.extend(atom.Class, {
-	Options: atom.Class({
-		setOptions: function(){
-			if (!this.options) this.options = {};
-
-			var args = [{}, this.options].append(arguments);
-			var options = this.options = atom.merge.apply(null, args);
-			if (this.addEvent) for (var option in options){
-				if (atom.typeOf(options[option]) == 'function' && (/^on[A-Z]/).test(option)) {
-					this.addEvent(option, options[option]);
-					delete options[option];
-				}
-			}
-			return this;
+atom.Class.Options = atom.Class({
+	options: {},
+	setOptions: function(){
+		if (!this.options) {
+			this.options = {};
+		} else if (this.options == this.self.prototype.options) {
+			// it shouldn't be link to static options
+			this.options = atom.clone(this.options);
 		}
-	})
+
+		for (var a = arguments, i = 0, l = a.length; i < l;) {
+			atom.extend(this.options, a[i++]);
+		}
+		var options = this.options;
+		
+		if (this.addEvent) for (var option in options){
+			if (atom.typeOf(options[option]) == 'function' && (/^on[A-Z]/).test(option)) {
+				this.addEvent(option, options[option]);
+				delete options[option];
+			}
+		}
+		return this;
+	}
 });
 
 /*
@@ -1057,7 +1092,11 @@ provides: Array
 ...
 */
 
-atom.extend(Array, 'safe', {
+new function () {
+
+var slice = [].slice;
+
+atom.extend(Array, {
 	range: function (from, to, step) {
 		step = (step * 1).limit(0) || 1;
 		var result = [];
@@ -1077,7 +1116,7 @@ atom.extend(Array, 'safe', {
 		);
 	},
 	fill: function (array, fill) {
-		array = Array.isArray(array) ? array : new Array(1 * array);
+		array = Array.isArray(array) ? array : new Array(array * 1);
 		for (var i = array.length; i--;) array[i] = fill;
 		return array;
 	},
@@ -1092,9 +1131,15 @@ atom.extend(Array, 'safe', {
 	}
 });
 
-atom.implement(Array, 'safe', {
-	contains: function (elem) {
-		return this.indexOf(elem) != -1;
+atom.implement(Array, {
+	get last(){
+		return this.length ? this[this.length - 1] : null;
+	},
+	get random(){
+		return this.length ? this[Number.random(0, this.length - 1)] : null;
+	},
+	contains: function (elem, fromIndex) {
+		return this.indexOf(elem, fromIndex) != -1;
 	},
 	include: function(item){
 		if (!this.contains(item)) this.push(item);
@@ -1107,7 +1152,9 @@ atom.implement(Array, 'safe', {
 		return this;
 	},
 	erase: function(item){
-		for (var i = this.length; i--;) if (this[i] === item) this.splice(i, 1);
+		for (var i = this.length; i--;) {
+			if (this[i] === item) this.splice(i, 1);
+		}
 		return this;
 	},
 	toKeys: function (value) {
@@ -1120,20 +1167,14 @@ atom.implement(Array, 'safe', {
 		for (var i = 0, l = array.length; i < l; i++) this.include(array[i]);
 		return this;
 	},
-	last: function(){
-		return this.length ? this[this.length - 1] : null;
-	},
-	random: function(){
-		return this.length ? this[Number.random(0, this.length - 1)] : null;
-	},
 	pick: function(){
-		for (var i = 0, l = this.length; i < l; i++){
-			if (this[i] || this[i] === 0) return this[i];
+		for (var i = 0, l = this.length; i < l; i++) {
+			if (this[i] != null) return this[i];
 		}
 		return null;
 	},
 	invoke: function(context){
-		var args = [].slice.call(arguments, 1);
+		var args = slice.call(arguments, 1);
 		if (typeof context == 'string') {
 			var methodName = context;
 			context = null;
@@ -1181,7 +1222,7 @@ atom.implement(Array, 'safe', {
 		return obj;
 	},
 	clean: function (){
-		return this.filter(function (item) { return !!item; });
+		return this.filter(function (item) { return item != null; });
 	},
 	empty: function () {
 		this.length = 0;
@@ -1190,23 +1231,27 @@ atom.implement(Array, 'safe', {
 	clone: function () {
 		return atom.clone(this);
 	},
-	hexToRgb: function(){
+	hexToRgb: function(array){
 		if (this.length != 3) return null;
-		return this.map(function(value){
+		var rgb = this.map(function(value){
 			if (value.length == 1) value += value;
-			return value.toInt(16);
+			return parseInt(value, 16);
 		});
+		return (array) ? rgb : 'rgb(' + rgb + ')';
 	},
-	rgbToHex: function(){
+	rgbToHex: function(array) {
 		if (this.length < 3) return null;
+		if (this.length == 4 && this[3] == 0 && !array) return 'transparent';
 		var hex = [];
 		for (var i = 0; i < 3; i++){
 			var bit = (this[i] - 0).toString(16);
-			hex.push(bit.length == 1 ? '0' + bit : bit);
+			hex.push((bit.length == 1) ? '0' + bit : bit);
 		}
-		return hex;
+		return (array) ? hex : '#' + hex.join('');
 	}
 });
+
+};
 
 /*
 ---
@@ -1230,8 +1275,10 @@ new function () {
 	var getContext = function (bind, self) {
 		return (bind === false || bind === Function.context) ? self : bind;
 	};
-	
-	atom.extend(Function, 'safe', {
+
+	var slice = [].slice;
+
+	atom.extend(Function, {
 		lambda : function (value) {
 			var returnThis = (arguments.length == 0);
 			return function () { return returnThis ? this : value; };
@@ -1246,7 +1293,7 @@ new function () {
 		context: {}
 	});
 
-	atom.implement(Function, 'safe', {
+	atom.implement(Function, {
 		context: function(bind, args){
 			var fn = this;
 			args = args ? atom.toArray(args) : [];
@@ -1257,7 +1304,7 @@ new function () {
 		only: function(numberOfArgs, bind) {
 			var fn = this;
 			return function() {
-				return fn.apply(getContext(bind, this), [].slice.call(arguments,0,numberOfArgs))
+				return fn.apply(getContext(bind, this), slice.call(arguments, 0, numberOfArgs))
 			};
 		}
 	});
@@ -1271,15 +1318,18 @@ new function () {
 			Timeout : function () { clearTimeout (this); },
 			Interval: function () { clearInterval(this); }
 		},
-		run: function (name, time, bind, args) {
-			var result  = timeout.set[name].call(null, this.context(bind, args), time);
-			result.stop = timeout.clear[name].context(result);
-			return result;
+		get: function (name) {
+			return function (time, bind, args) {
+				var result  = timeout.set[name].call(null, this.context(bind, args), time);
+				result.stop = timeout.clear[name].context(result);
+				return result;
+			};
 		}
 	};
-	atom.implement(Function, 'safe', {
-		delay:      timeout.run.context(Function.context, ['Timeout']),
-		periodical: timeout.run.context(Function.context, ['Interval'])
+	
+	atom.implement(Function, {
+		delay:      timeout.get('Timeout'),
+		periodical: timeout.get('Interval')
 	});
 }(); 
 
@@ -1300,14 +1350,13 @@ provides: Number
 
 ...
 */
-
-atom.extend(Number, 'safe', {
+atom.extend(Number, {
 	random : function (min, max) {
 		return Math.floor(Math.random() * (max - min + 1) + min);
 	}
 });
 
-atom.implement(Number, 'safe', {
+atom.implement(Number, {
 	between: function (n1, n2, equals) {
 		return (n1 <= n2) && (
 			(equals == 'L' && this == n1) ||
@@ -1354,7 +1403,6 @@ atom.implement(Number, 'safe', {
 		};
 	});
 
-
 /*
 ---
 
@@ -1372,7 +1420,7 @@ provides: Object
 ...
 */
 
-atom.extend(Object, 'safe', {
+atom.extend(Object, {
 	invert: function (object) {
 		var newObj = {};
 		for (var i in object) newObj[object[i]] = i;
@@ -1418,12 +1466,13 @@ atom.extend(Object, 'safe', {
 		return key;
 	},
 	deepEquals: function (first, second) {
-		var callee = arguments.callee;
+		if (!first || (typeof first) !== (typeof second)) return false;
+
 		for (var i in first) {
 			var f = first[i], s = second[i];
-			if (typeof f == 'object') {
-				if (!s || !callee(f, s)) return false;
-			} else if (f != s) {
+			if (typeof f === 'object') {
+				if (!s || !Object.deepEquals(f, s)) return false;
+			} else if (f !== s) {
 				return false;
 			}
 		}
@@ -1467,7 +1516,7 @@ String.uniqueID = function () {
 	return (UID++).toString(36);
 };
 
-atom.implement(String, 'safe', {
+atom.implement(String, {
 	safeHtml: function () {
 		return this.replaceAll(safeHtmlRE, {
 			'&'  : '&amp;',
