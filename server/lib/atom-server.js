@@ -1,3 +1,26 @@
+
+/*
+---
+
+name: "AtomJS"
+
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
+
+authors:
+	- Pavel Ponomarenko aka Shock <shocksilien@gmail.com>
+
+inspiration:
+	- "[JQuery](http://jquery.com)"
+	- "[MooTools](http://mootools.net)"
+
+...
+*/
+
+(function (Object, Array, undefined) { // AtomJS
+'use strict';
+	
 /*
 ---
 
@@ -5,11 +28,9 @@ name: "Core"
 
 description: "The core of AtomJS."
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
-
-copyright: "Copyright (c) 2010-2011 [Ponomarenko Pavel](shocksilien@gmail.com)."
-
-authors: "The AtomJS production team"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 inspiration:
   - "[JQuery](http://jquery.com)"
@@ -20,134 +41,255 @@ provides: atom
 ...
 */
 
-(function (Object, Array) {
-	var prototype = 'prototype',
-	    apply     = 'apply',
-		toString  = Object[prototype].toString,
-		global    = (this.window || GLOBAL),
-		slice     = [].slice,
-		FuncProto = Function[prototype];
+var
+	prototype = 'prototype',
+	apply     = 'apply',
+	toString  = Object[prototype].toString,
+	slice     = [].slice;
 
-	var atom = global.atom = function () {
-		if (atom.initialize) return atom.initialize[apply](this, arguments);
-	};
+var atom = this.atom = function () {
+	if (atom.initialize) return atom.initialize[apply](this, arguments);
+};
 
-	var innerExtend = function (proto) {
-		return function (elem, from) {
-			if (from == null) {
-				from = elem;
-				elem = atom;
-			}
+atom.global = this;
 
-			var ext = proto ? elem[prototype] : elem,
-			    accessors = atom.accessors && atom.accessors.inherit;
-			for (var i in from) if (i != 'constructor') {
-				if ( accessors && accessors(from, ext, i) ) continue;
-
-				ext[i] = clone(from[i]);
-			}
-			return elem;
-		};
-	};
-
-	var typeOf = function (item) {
-		if (item == null) return 'null';
-
-		var string = toString.call(item);
-		for (var i in typeOf.types) if (i == string) return typeOf.types[i];
-
-		if (item.nodeName){
-			if (item.nodeType == 1) return 'element';
-			if (item.nodeType == 3) return /\S/.test(item.nodeValue) ? 'textnode' : 'whitespace';
-		} else if (item && item.callee && typeof item.length == 'number'){
-			return 'arguments';
+var innerExtend = function (proto) {
+	return function (elem, from) {
+		if (from == null) {
+			from = elem;
+			elem = atom;
 		}
-		
-		var type = typeof item;
-		
-		return (type == 'object' && atom.Class && item instanceof atom.Class) ? 'class' : type;
-	};
-	typeOf.types = {};
-	['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Class'].forEach(function(name) {
-		typeOf.types['[object ' + name + ']'] = name.toLowerCase();
-	});
 
+		var ext = proto ? elem[prototype] : elem,
+		    accessors = atom.accessors && atom.accessors.inherit;
 
-	var clone = function (object) {
-		var type = typeOf(object);
-		return type in clone.types ? clone.types[type](object) : object;
-	};
-	clone.types = {
-		array: function (array) {
-			var i = array.length, c = new Array(i);
-			while (i--) c[i] = clone(array[i]);
-			return c;
-		},
-		object: function (object) {
-			if (typeof object.clone == 'function') return object.clone();
+		for (var i in from) if (i != 'constructor') {
+			if ( accessors && accessors(from, ext, i) ) continue;
 
-			var c = {}, accessors = atom.accessors && atom.accessors.inherit;
-			for (var key in object) {
-				if (accessors && accessors(object, c, key)) continue;
-				c[key] = clone(object[key]);
-			}
-			return c;
+			ext[i] = clone(from[i]);
 		}
+		return elem;
 	};
+};
+
+var typeOf = function (item) {
+	if (item == null) return 'null';
+
+	var string = toString.call(item);
+	for (var i in typeOf.types) if (i == string) return typeOf.types[i];
+
+	if (item.nodeName){
+		if (item.nodeType == 1) return 'element';
+		if (item.nodeType == 3) return /\S/.test(item.nodeValue) ? 'textnode' : 'whitespace';
+	}
+
+	var type = typeof item;
+
+	if (item && type == 'object') {
+		if (atom.Class && item instanceof atom.Class) return 'class';
+		if (atom.isEnumerable(item)) return 'arguments';
+	}
+
+	return type;
+};
+typeOf.types = {};
+['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Class'].forEach(function(name) {
+	typeOf.types['[object ' + name + ']'] = name.toLowerCase();
+});
+
+
+var clone = function (object) {
+	var type = typeOf(object);
+	return type in clone.types ? clone.types[type](object) : object;
+};
+clone.types = {
+	array: function (array) {
+		var i = array.length, c = new Array(i);
+		while (i--) c[i] = clone(array[i]);
+		return c;
+	},
+	object: function (object) {
+		if (typeof object.clone == 'function') return object.clone();
+
+		var c = {}, accessors = atom.accessors && atom.accessors.inherit;
+		for (var key in object) {
+			if (accessors && accessors(object, c, key)) continue;
+			c[key] = clone(object[key]);
+		}
+		return c;
+	}
+};
+
+atom.extend = innerExtend(false);
+
+atom.extend({
+	implement: innerExtend(true),
+	toArray: function (elem) {
+		return slice.call(elem);
+	},
+	/**
+	 * @deprecated - use console-cap instead:
+	 * @see https://github.com/theshock/console-cap/
+	 */
+	log: function () {
+		// ie9 bug, typeof console.log == 'object'
+		if (atom.global.console) Function.prototype.apply.call(console.log, console, arguments);
+	},
+	isEnumerable: function(item){
+		return item != null && toString.call(item) != '[object Function]' && typeof item.length == 'number';
+	},
+	append: function (target, source) {
+		for (var i = 1, l = arguments.length; i < l; i++){
+			source = arguments[i] || {};
+			for (var key in source) {
+				target[key] = source[key];
+			}
+		}
+		return target;
+	},
+	typeOf: typeOf,
+	clone: clone
+});
+
+// JavaScript 1.8.5 Compatiblity
+// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
+
+if (!Function.prototype.bind) {
+	Function.prototype.bind = function(context /*, arg1, arg2... */) {
+		if (typeof this !== "function") throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
+
+		var args   = slice.call(arguments, 1),
+			toBind = this,
+			Nop    = function () {},
+			Bound  = function () {
+				var isInstance;
+				// Opera & Safari bug fixed. I must fix it in right way
+				// TypeError: Second argument to 'instanceof' does not implement [[HasInstance]]
+				try {
+					isInstance = this instanceof Nop;
+				} catch (ignored) {
+					// console.log( 'bind error', Nop.prototype );
+					isInstance = false;
+				}
+				return toBind.apply(
+					isInstance ? this : ( context || {} ),
+					args.concat( slice.call(arguments) )
+				);
+			};
+		Nop.prototype   = toBind.prototype;
+		Bound.prototype = new Nop();
+		return Bound;
+	};
+}
+
+// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/keys
+if (!Object.keys) {
+	Object.keys = function(obj) {
+		if (obj !== Object(obj)) throw new TypeError('Object.keys called on non-object');
+
+		var keys = [], i, has = Object[prototype].hasOwnProperty;
+		for (i in obj) if (has.call(obj, i)) keys.push(i);
+		return keys;
+	};
+}
+
+// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/isArray
+if (!Array.isArray) {
+	Array.isArray = function(o) {
+		return o && toString.call(o) === '[object Array]';
+	};
+}
+
+// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/create
+if (!Object.create) {
+	Object.create = function (o) {
+		if (arguments.length > 1) {
+			throw new Error('Object.create implementation only accepts the first parameter.');
+		}
+		function F() {}
+		F.prototype = o;
+		return new F();
+	};
+}
+
+/*
+---
+
+name: "Number"
+
+description: "Contains Number Prototypes like limit, round, times, and ceil."
+
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
+
+requires:
+	- atom
+
+provides: Number
+
+...
+*/
+
+new function () {
 	
-	atom.extend = innerExtend(false);
+atom.extend(Number, {
+	random : function (min, max) {
+		return Math.floor(Math.random() * (max - min + 1) + min);
+	}
+});
 
-	atom.extend({
-		implement: innerExtend(true),
-		toArray: function (elem) {
-			return slice.call(elem);
-		},
-		log: function () {
-			// ie9 bug, typeof console.log == 'object'
-			if (global.console) FuncProto[apply].call(console.log, console, arguments);
-		},
-		typeOf: typeOf,
-		clone: clone
+atom.implement(Number, {
+	between: function (n1, n2, equals) {
+		return (n1 <= n2) && (
+			(equals == 'L' && this == n1) ||
+			(equals == 'R' && this == n2) ||
+			(  this  > n1  && this  < n2) ||
+			([true,'LR','RL'].indexOf(equals) != -1 && (n1 == this || n2 == this))
+		);
+	},
+	equals : function (to, accuracy) {
+		if (accuracy == null) accuracy = 8;
+		return this.toFixed(accuracy) == to.toFixed(accuracy);
+	},
+	limit: function(min, max){
+		var bottom = Math.max(min, this);
+		return arguments.length == 2 ?
+			Math.min(max, bottom) : bottom;
+	},
+	round: function(precision){
+		precision = Math.pow(10, precision || 0).toFixed(precision < 0 ? -precision : 0);
+		return Math.round(this * precision) / precision;
+	},
+	toFloat: function(){
+		return parseFloat(this);
+	},
+	toInt: function(base){
+		return parseInt(this, base || 10);
+	},
+	stop: function() {
+		var num = Number(this);
+		if (num) {
+			clearInterval(num);
+			clearTimeout (num);
+		}
+		return this;
+	},
+	xor: function (x) {
+		return Boolean.xor( this.valueOf(), x );
+	}
+});
+
+['abs','acos','asin','atan','atan2','ceil','cos','exp','floor','log','max','min','pow','sin','sqrt','tan']
+	.forEach(function(method) {
+		if (Number[method]) return;
+		
+		Number.prototype[method] = function() {
+			return Math[method].apply(null, [this].append(arguments));
+		};
 	});
 
-	// JavaScript 1.8.5 Compatiblity
-
-	// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Function/bind
-	if (!FuncProto.bind) {
-		FuncProto.bind = function(context /*, arg1, arg2... */) {
-			var args  = slice.call(arguments, 1),
-				self  = this,
-				nop   = function () {},
-				bound = function () {
-					return self[apply](
-						this instanceof nop ? this : ( context || {} ),
-						args.concat( slice.call(arguments) )
-					);
-				};
-			nop[prototype]   = self[prototype];
-			bound[prototype] = new nop();
-			return bound;
-		};
-	}
-
-	// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/keys
-	if (!Object.keys) {
-		Object.keys = function(obj) {
-			if (obj !== Object(obj)) throw new TypeError('Object.keys called on non-object');
-
-			var keys = [], i, has = Object[prototype].hasOwnProperty;
-			for (i in obj) if (has.call(obj, i)) keys.push(i);
-			return keys;
-		};
-	}
-
-	// https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/isArray
-	if (!Array.isArray) {
-		Array.isArray = function(o) {
-			return o && toString.call(o) === '[object Array]';
-		};
-	}
-})(Object, Array);
+};
 
 /*
 ---
@@ -156,18 +298,20 @@ name: "Array"
 
 description: "Contains Array Prototypes like include, contains, and erase."
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
+	- Number
 
 provides: Array
 
 ...
 */
 
-new function () {
-
+new function (undefined) {
 var slice = [].slice;
 
 atom.extend(Array, {
@@ -180,7 +324,11 @@ atom.extend(Array, {
 		} while (from <= to);
 		return result;
 	},
-	from: atom.toArray,
+	from: function (item) {
+		if (item == null) return [];
+		return (!atom.isEnumerable(item) || typeof item == 'string') ? [item] :
+			(atom.typeOf(item) == 'array') ? item : slice.call(item);
+	},
 	pickFrom: function (args) {
 		return Array.from(
 			   args
@@ -194,9 +342,23 @@ atom.extend(Array, {
 		for (var i = array.length; i--;) array[i] = fill;
 		return array;
 	},
+	fillMatrix: function (width, height, fill) {
+		var array = new Array(height);
+		while (height--) {
+			array[height] = Array.fill(width, fill);
+		}
+		return array;
+	},
 	collect: function (obj, props, Default) {
 		var array = [];
-		for (var i in props.toKeys()) array.push(i in obj ? obj[i] : Default);
+		for (var i = 0, l = props.length; i < l; i++) {
+			array.push(props[i] in obj ? obj[props[i]] : Default);
+		}
+		return array;
+	},
+	create: function (length, fn) {
+		var array = new Array(length);
+		for (var i = 0; i < length; i++) array[i] = fn(i, array);
 		return array;
 	},
 	toHash: function () {
@@ -212,6 +374,25 @@ atom.implement(Array, {
 	get random(){
 		return this.length ? this[Number.random(0, this.length - 1)] : null;
 	},
+	popRandom: function () {
+		if (this.length == 0) return null;
+		var index = Number.random(0, this.length - 1), elem = this[index];
+		this.splice(index, 1);
+		return elem;
+	},
+	property: function (prop) {
+		return this.map(function (elem) {
+			return elem != null ? elem[ prop ] : null;
+		});
+	},
+	// Correctly works with `new Array(10).fullMap(fn)`
+	fullMap: function (fn, bind) {
+		var mapped = new Array(this.length);
+		for (var i = 0, l = mapped.length; i < l; i++) {
+			mapped[i] = fn.call(bind, this[i], i, this);
+		}
+		return mapped;
+	},
 	contains: function (elem, fromIndex) {
 		return this.indexOf(elem, fromIndex) != -1;
 	},
@@ -220,7 +401,7 @@ atom.implement(Array, {
 		return this;
 	},
 	append: function (array) {
-		for (var i = 0, l = arguments.length; i < l; i++) {
+		for (var i = 0, l = arguments.length; i < l; i++) if (arguments[i]) {
 			this.push.apply(this, arguments[i]);
 		}
 		return this;
@@ -258,7 +439,13 @@ atom.implement(Array, {
 		});
 	},
 	shuffle : function () {
-		for(var j, x, i = this.length; i; j = parseInt(Math.random() * i), x = this[--i], this[i] = this[j], this[j] = x);
+		for (var tmp, moveTo, index = this.length; index--;) {
+			moveTo = Number.random( 0, index );
+			// [ this[index], this[moveTo] ] = [ this[moveTo], this[index] ]
+			tmp          = this[index ];
+			this[index]  = this[moveTo];
+			this[moveTo] = tmp;
+		}
 		return this;
 	},
 	sortBy : function (method, reverse) {
@@ -276,6 +463,14 @@ atom.implement(Array, {
 	},
 	max: function(){
 		return Math.max.apply(null, this);
+	},
+	mul: function (factor) {
+		for (var i = this.length; i--;) this[i] *= factor;
+		return this;
+	},
+	add: function (number) {
+		for (var i = this.length; i--;) this[i] += number;
+		return this;
 	},
 	average: function(){
 		return this.length ? this.sum() / this.length : 0;
@@ -322,6 +517,20 @@ atom.implement(Array, {
 			hex.push((bit.length == 1) ? '0' + bit : bit);
 		}
 		return (array) ? hex : '#' + hex.join('');
+	},
+
+	reduce: [].reduce || function(fn, value){
+		for (var i = 0, l = this.length; i < l; i++){
+			if (i in this) value = value === undefined ? this[i] : fn.call(null, value, this[i], i, this);
+		}
+		return value;
+	},
+
+	reduceRight: [].reduceRight || function(fn, value){
+		for (var i = this.length; i--;){
+			if (i in this) value = value === undefined ? this[i] : fn.call(null, value, this[i], i, this);
+		}
+		return value;
 	}
 });
 
@@ -334,7 +543,9 @@ name: "Function"
 
 description: "Contains Function Prototypes like context, periodical and delay."
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
@@ -346,6 +557,7 @@ provides: Function
 */
 
 new function () {
+
 	var getContext = function (bind, self) {
 		return (bind === false || bind === Function.context) ? self : bind;
 	};
@@ -356,6 +568,9 @@ new function () {
 		lambda : function (value) {
 			var returnThis = (arguments.length == 0);
 			return function () { return returnThis ? this : value; };
+		},
+		copier: function (value) {
+			return function () { return atom.clone(value); }
 		},
 		log: function (msg) {
 			var args = arguments.length ? arguments : null;
@@ -368,9 +583,10 @@ new function () {
 	});
 
 	atom.implement(Function, {
+		/** @deprecated */
 		context: function(bind, args){
 			var fn = this;
-			args = args ? atom.toArray(args) : [];
+			args = Array.from(args);
 			return function(){
 				return fn.apply(getContext(bind, this), [].append(args, arguments));
 			};
@@ -380,102 +596,42 @@ new function () {
 			return function() {
 				return fn.apply(getContext(bind, this), slice.call(arguments, 0, numberOfArgs))
 			};
+		},
+		after: function (fnName) {
+			var onReady = this, after = {}, ready = {};
+			var checkReady = function () {
+				for (var i in after) if (!(i in ready)) return;
+				onReady(ready);
+			};
+			for (var i = 0, l = arguments.length; i < l; i++) {
+				(function (key) {
+					after[key] = function () {
+						ready[key] = arguments;
+						checkReady();
+					};
+				})(arguments[i]);
+			}
+			return after;
 		}
 	});
 
-	var timeout = {
-		set : {
+	var timeout = function (name) {
+		var set = {
 			Timeout : setTimeout,
 			Interval: setInterval
-		},
-		clear : {
-			Timeout : function () { clearTimeout (this); },
-			Interval: function () { clearInterval(this); }
-		},
-		get: function (name) {
-			return function (time, bind, args) {
-				var result  = timeout.set[name].call(null, this.context(bind, args), time);
-				result.stop = timeout.clear[name].context(result);
-				return result;
-			};
-		}
+		}[name];
+
+		return function (time, bind, args) {
+			return set.call(window, this.bind.apply(this, [bind].append(args)), time);
+		};
 	};
 	
 	atom.implement(Function, {
-		delay:      timeout.get('Timeout'),
-		periodical: timeout.get('Interval')
+		delay:      timeout('Timeout'),
+		periodical: timeout('Interval')
 	});
 }(); 
 
-
-/*
----
-
-name: "Number"
-
-description: "Contains Number Prototypes like limit, round, times, and ceil."
-
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
-
-requires:
-	- atom
-
-provides: Number
-
-...
-*/
-atom.extend(Number, {
-	random : function (min, max) {
-		return Math.floor(Math.random() * (max - min + 1) + min);
-	}
-});
-
-atom.implement(Number, {
-	between: function (n1, n2, equals) {
-		return (n1 <= n2) && (
-			(equals == 'L' && this == n1) ||
-			(equals == 'R' && this == n2) ||
-			(  this  > n1  && this  < n2) ||
-			([true,'LR','RL'].indexOf(equals) != -1 && (n1 == this || n2 == this))
-		);
-	},
-	equals : function (to, accuracy) {
-		if (arguments.length == 1) accuracy = 8;
-		return this.toFixed(accuracy) == to.toFixed(accuracy);
-	},
-	limit: function(min, max){
-		var bottom = Math.max(min, this);
-		return arguments.length == 2 ?
-			Math.min(max, bottom) : bottom;
-	},
-	round: function(precision){
-		precision = Math.pow(10, precision || 0).toFixed(precision < 0 ? -precision : 0);
-		return Math.round(this * precision) / precision;
-	},
-	toFloat: function(){
-		return parseFloat(this);
-	},
-	toInt: function(base){
-		return parseInt(this, base || 10);
-	},
-	stop: function() {
-		var num = Number(this);
-		if (num) {
-			clearInterval(num);
-			clearTimeout (num);
-		}
-		return this;
-	}
-});
-
-['abs','acos','asin','atan','atan2','ceil','cos','exp','floor','log','max','min','pow','sin','sqrt','tan']
-	.forEach(function(method) {
-		if (Number[method]) return;
-		
-		Number.prototype[method] = function() {
-			return Math[method].apply(null, [this].append(arguments));
-		};
-	});
 
 /*
 ---
@@ -484,7 +640,9 @@ name: "Object"
 
 description: "Object generic methods"
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
@@ -523,6 +681,13 @@ atom.extend(Object, {
 	isReal: function (obj) {
 		return obj || obj === 0;
 	},
+	map: function (obj, fn) {
+		var mapped = {};
+		for (var i in obj) if (obj.hasOwnProperty(i)) {
+			mapped[i] = fn( obj[i], i, obj );
+		}
+		return mapped;
+	},
 	max: function (obj) {
 		var max = null, key = null;
 		for (var i in obj) if (max == null || obj[i] > max) {
@@ -560,6 +725,40 @@ atom.extend(Object, {
 			object[key] = defaultValue;
 		}
 		return object;
+	},
+	path: {
+		parts: function (path, delimiter) {
+			return Array.isArray(path) ? path : String(path).split( delimiter || '.' );
+		},
+		get: function (object, path, delimiter) {
+			if (!path) return object;
+
+			path = Object.path.parts( path, delimiter );
+
+			for (var i = 0; i < path.length; i++) {
+				if (object != null && path[i] in object) {
+					object = object[path[i]];
+				} else {
+					return;
+				}
+			}
+
+			return object;
+		},
+		set: function (object, path, value, delimiter) {
+			path = Object.path.parts( path, delimiter );
+
+			var key = path.pop();
+
+			object = Object.path.get( object, path.length > 0 && path, delimiter );
+
+			if (object == null) {
+				return false;
+			} else {
+				object[key] = value;
+				return true;
+			}
+		}
 	}
 });
 
@@ -570,7 +769,9 @@ name: "String"
 
 description: "Contains String Prototypes like repeat, substitute, replaceAll and begins."
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
@@ -619,20 +820,35 @@ atom.implement(String, {
 		}
 		return this.split(find).join(replace);
 	},
+	contains: function (substr) {
+		return this.indexOf( substr ) >= 0;
+	},
 	begins: function (w, caseInsensitive) {
 		return (!caseInsensitive) ? w == this.substr(0, w.length) :
 			w.toLowerCase() == this.substr(0, w.length).toLowerCase();
+	},
+	ends: function (w, caseInsensitive) {
+		return (!caseInsensitive) ? w == this.substr(this.length - w.length) :
+			w.toLowerCase() == this.substr(this.length - w.length).toLowerCase();
 	},
 	ucfirst : function () {
 		return this[0].toUpperCase() + this.substr(1);
 	},
 	lcfirst : function () {
 		return this[0].toLowerCase() + this.substr(1);
+	},
+	trim: ''.trim || function () {
+		return this.trimLeft().trimRight();
+	},
+	trimLeft : ''.trimLeft || function () {
+		return this.replace(/^\s+/, '');
+	},
+	trimRight: ''.trimRight || function () {
+		return this.replace(/\s+$/, '');
 	}
 });
 
 }();
-
 
 /*
 ---
@@ -641,11 +857,9 @@ name: "Accessors"
 
 description: "Implementing accessors"
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
-
-copyright: "Copyright (c) 2010-2011 [Ponomarenko Pavel](shocksilien@gmail.com)."
-
-authors: "The AtomJS production team"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
@@ -660,28 +874,21 @@ provides: accessors
 
 	if (!standard && !nonStandard) throw new Error('Accessors are not supported');
 
-	var getAccessors = nonStandard ?
+	var lookup = nonStandard ?
 		function (from, key, bool) {
-			var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key);
+			var g = from.__lookupGetter__(key), s = from.__lookupSetter__(key), has = !!(g || s);
 
-			if ( g || s ) {
-				if (bool) return true;
-				return {
-					get: g,
-					set: s
-				};
-			}
-			return bool ? false : null;
+			if (bool) return has;
+
+			return has ? { get: g, set: s } : null;
 		} :
 		function (from, key, bool) {
 			var descriptor = Object.getOwnPropertyDescriptor(from, key);
 			if (!descriptor) {
 				// try to find accessors according to chain of prototypes
 				var proto = Object.getPrototypeOf(from);
-				if (proto) return getAccessors(proto, key, bool);
-			}
-
-			if (descriptor && (descriptor.set || descriptor.get) ) {
+				if (proto) return accessors.lookup(proto, key, bool);
+			} else if ( descriptor.set || descriptor.get ) {
 				if (bool) return true;
 
 				return {
@@ -690,14 +897,18 @@ provides: accessors
 				};
 			}
 			return bool ? false : null;
-		}; /* getAccessors */
+		}; /* lookup */
 
-	var setAccessors = function (object, prop, descriptor) {
-		if (descriptor) {
-			if (nonStandard) {
+	var define = nonStandard ?
+		function (object, prop, descriptor) {
+			if (descriptor) {
 				if (descriptor.get) object.__defineGetter__(prop, descriptor.get);
 				if (descriptor.set) object.__defineSetter__(prop, descriptor.set);
-			} else {
+			}
+			return object;
+		} :
+		function (object, prop, descriptor) {
+			if (descriptor) {
 				var desc = {
 					get: descriptor.get,
 					set: descriptor.set,
@@ -706,32 +917,27 @@ provides: accessors
 				};
 				Object.defineProperty(object, prop, desc);
 			}
+			return object;
+		};
+
+	var accessors = {
+		lookup: lookup,
+		define: define,
+		has: function (object, key) {
+			return accessors.lookup(object, key, true);
+		},
+		inherit: function (from, to, key) {
+			var a = accessors.lookup(from, key);
+
+			if ( a ) {
+				accessors.define(to, key, a);
+				return true;
+			}
+			return false;
 		}
-		return object;
-	};
-	
-	var hasAccessors = function (object, key) {
-		return getAccessors(object, key, true);
 	};
 
-	var inheritAccessors = function (from, to, key) {
-		var a = getAccessors(from, key);
-
-		if ( a ) {
-			setAccessors(to, key, a);
-			return true;
-		}
-		return false;
-	};
-
-	atom.extend({
-		accessors: {
-			get: getAccessors,
-			set: setAccessors,
-			has: hasAccessors,
-			inherit: inheritAccessors
-		}
-	});
+	atom.extend({ accessors: accessors });
 })(Object);
 
 /*
@@ -741,11 +947,14 @@ name: "Class"
 
 description: "Contains the Class Function for easily creating, extending, and implementing reusable Classes."
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
 	- accessors
+	- Array
 
 inspiration:
   - "[MooTools](http://mootools.net)"
@@ -762,19 +971,25 @@ var typeOf = atom.typeOf,
 	extend = atom.extend,
 	accessors = atom.accessors.inherit,
 	prototype = 'prototype',
-	lambda    = function (value) { return function () { return value; }};
+	lambda    = function (value) { return function () { return value; }},
+	prototyping = false;
 
 var Class = function (params) {
-	if (Class.$prototyping) return this;
+	if (prototyping) return this;
 
-	if (typeOf(params) == 'function') params = { initialize: params };
+	if (typeof params == 'function' && typeOf(params) == 'function') params = { initialize: params };
 
 	var Constructor = function(){
-		if (Constructor.$prototyping) return this;
-		return this.initialize ? this.initialize.apply(this, arguments) : this;
+		if (this instanceof Constructor) {
+			if (prototyping) return this;
+			return this.initialize ? this.initialize.apply(this, arguments) : this;
+		} else {
+			return Constructor.invoke.apply(Constructor, arguments);
+		}
 	};
 	extend(Constructor, Class);
 	Constructor[prototype] = getInstance(Class);
+
 	Constructor
 		.implement(params, false)
 		.reserved(true, {
@@ -782,11 +997,11 @@ var Class = function (params) {
 			self  : Constructor
 		})
 		.reserved({
-			factory : new function() {
+			factory : function() {
 				function Factory(args) { return Constructor.apply(this, args); }
 				Factory[prototype] = Constructor[prototype];
 				return function(args) { return new Factory(args || []); }
-			}
+			}()
 		});
 
 	return Constructor;
@@ -820,20 +1035,28 @@ var wrap = function(self, key, method){
 	return wrapper;
 };
 
-extend(Class, {
-	extend: function (name, fn) {
-		if (typeof name == 'string') {
-			var object = {};
-			object[name] = fn;
-		} else {
-			object = name;
-		}
+var getInstance = function(Class){
+	prototyping = true;
+	var proto = new Class;
+	prototyping = false;
+	return proto;
+};
 
-		for (var i in object) if (!accessors(object, this, i)) {
-			 this[i] = object[i];
-		}
-		return this;
-	},
+Class.extend =  function (name, fn) {
+	if (typeof name == 'string') {
+		var object = {};
+		object[name] = fn;
+	} else {
+		object = name;
+	}
+
+	for (var i in object) if (!accessors(object, this, i)) {
+		 this[i] = object[i];
+	}
+	return this;
+};
+
+Class.extend({
 	implement: function(name, fn, retain){
 		if (typeof name == 'string') {
 			var params = {};
@@ -852,7 +1075,8 @@ extend(Class, {
 					if (value == null) continue;
 				}
 
-				if (typeOf(value) == 'function'){
+				if (typeof value == 'function' && typeOf(value) == 'function'){
+					if (value.$origin) value = value.$origin;
 					if (value.$hidden == 'next') {
 						value.$hidden = true
 					} else if (value.$hidden) {
@@ -867,7 +1091,7 @@ extend(Class, {
 		return this;
 	},
 	mixin: function () {
-		atom.toArray(arguments).forEach(function (item) {
+		Array.from(arguments).forEach(function (item) {
 			this.implement(getInstance(item));
 		}.bind(this));
 		return this;
@@ -879,23 +1103,16 @@ extend(Class, {
 		}
 		var target = toProto ? this[prototype] : this;
 		for (var name in props) {
-			target.__defineGetter__(name, lambda(props[name]));
+			atom.accessors.define(target, name, { get: lambda(props[name]) });
 		}
 		return this;
 	},
 	isInstance: function (object) {
 		return object instanceof this;
-	}
-});
-
-var getInstance = function(klass){
-	klass.$prototyping = true;
-	var proto = new klass;
-	delete klass.$prototyping;
-	return proto;
-};
-
-extend(Class, {
+	},
+	invoke: function () {
+		return this.factory( arguments );
+	},
 	Mutators: {
 		Extends: function(parent){
 			if (parent == null) throw new TypeError('Cant extends from null');
@@ -904,7 +1121,7 @@ extend(Class, {
 		},
 
 		Implements: function(items){
-			this.mixin.apply(this, items);
+			this.mixin.apply(this, Array.from(items));
 		},
 
 		Static: function(properties) {
@@ -922,6 +1139,8 @@ extend(Class, {
 	}
 });
 
+Class.abstractMethod.$abstract = true;
+
 extend({ Class: Class });
 
 })(atom);
@@ -933,7 +1152,9 @@ name: "Class.Events"
 
 description: ""
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
@@ -954,7 +1175,7 @@ var Class = atom.Class;
 var fire = function (name, fn, args, onfinish) {
 	var result = fn.apply(this, Array.from(args || []));
 	if (typeof result == 'string' && result.toLowerCase() == 'removeevent') {
-		onfinish.push(this.removeEvent.context(this, [name, fn]));
+		onfinish.push(this.removeEvent.bind(this, name, fn));
 	}
 };
 
@@ -964,8 +1185,8 @@ var removeOn = function(string){
 	});
 };
 
-var initEvents = function (object) {
-	if (!object._events) object._events = { $ready: {} };
+var initEvents = function (object, reset) {
+	if (reset || !object._events) object._events = { $ready: {} };
 };
 
 var nextTick = function (fn) {
@@ -1017,23 +1238,26 @@ atom.extend(Class, {
 			return this;
 		},
 		removeEvent: function (name, fn) {
+			if (!arguments.length) {
+				initEvents( this, true );
+				return this;
+			}
+
 			initEvents(this);
 
-			if (arguments.length == 1 && typeof name != 'string') {
-				for (i in name) {
-					this.addEvent(i, name[i]);
-				}
-			} else if (Array.isArray(name)) {
+			if (Array.isArray(name)) {
 				for (var i = name.length; i--;) {
 					this.removeEvent(name[i], fn);
 				}
-				return this;
+			} else if (arguments.length == 1 && typeof name != 'string') {
+				for (i in name) {
+					this.removeEvent(i, name[i]);
+				}
 			} else {
 				name = removeOn(name);
 				if (name == '$ready') {
 					throw new TypeError('Event name «$ready» is reserved');
-				}
-				if (arguments.length == 1) {
+				} else if (arguments.length == 1) {
 					this._events[name] = [];
 				} else if (name in this._events) {
 					this._events[name].erase(fn);
@@ -1068,7 +1292,7 @@ atom.extend(Class, {
 				name = removeOn(name);
 				this._events.$ready[name] = args || [];
 				this.fireEvent(name, args || []);
-			}.context(this));
+			}.bind(this));
 			return this;
 		}
 	})
@@ -1083,7 +1307,9 @@ name: "Class.Options"
 
 description: ""
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 requires:
 	- atom
@@ -1107,8 +1333,8 @@ atom.Class.Options = atom.Class({
 			this.options = atom.clone(this.options);
 		}
 
-		for (var a = arguments, i = 0, l = a.length; i < l;) {
-			atom.extend(this.options, a[i++]);
+		for (var a = arguments, i = 0, l = a.length; i < l; i++) {
+			if (typeof a[i] == 'object') atom.extend(this.options, a[i]);
 		}
 		var options = this.options;
 		
@@ -1129,13 +1355,16 @@ name: "Class.Mutators.Generators"
 
 description: "Provides Generators mutator"
 
-license: "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+license:
+	- "[GNU Lesser General Public License](http://opensource.org/licenses/lgpl-license.php)"
+	- "[MIT License](http://opensource.org/licenses/mit-license.php)"
 
 authors:
 	- "Shock <shocksilien@gmail.com>"
 
 requires:
 	- atom
+	- accessors
 	- Class
 
 provides: Class.Mutators.Generators
@@ -1153,8 +1382,9 @@ var getter = function (key, fn) {
 };
 
 atom.Class.Mutators.Generators = function(properties) {
-	for (var i in properties) this.prototype.__defineGetter__(i, getter(i, properties[i]));
+	for (var i in properties) atom.accessors.define(this.prototype, i, { get: getter(i, properties[i]) });
 };
 
 };
- 
+
+}.call(typeof exports == 'undefined' ? window : exports, Object, Array)); 
