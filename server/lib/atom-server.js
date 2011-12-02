@@ -622,7 +622,7 @@ new function () {
 		}[name];
 
 		return function (time, bind, args) {
-			return set.call(window, this.bind.apply(this, [bind].append(args)), time);
+			return set.call(null, this.bind.apply(this, [bind].append(args)), time);
 		};
 	};
 	

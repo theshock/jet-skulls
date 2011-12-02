@@ -3,9 +3,16 @@ var User = exports.User = atom.Class(
 /**
  * Класс, который отвечает за пользователя
  * @lends User#
+ * @augments Class.Events#
  */
 {
 	Implements: atom.Class.Events,
+
+	/** @property {number} */
+	sessionId: null,
+
+	/** @property {Client} */
+	connection: null,
 
 	/**
 	 * @constructs
@@ -21,10 +28,15 @@ var User = exports.User = atom.Class(
 	 */
 	listen: function (connection) {
 		var user = this;
+
+		// нам необходим connection, чтобы слать сообщение пользователю
 		user.connection = connection;
+
+		// при получении сообщения от пользователя
 		connection.on( 'message', function(message){
-			console.log( 'msg' );
+			// срабатывает событие команды
 			user.fireEvent( 'message/' + message.command, [ message.params ]);
+			// и срабатывает событие о сообщении в целом
 			user.fireEvent( 'message'  , [ message.command, message.params ]);
 		});
 	},
@@ -45,15 +57,11 @@ var User = exports.User = atom.Class(
 		return this;
 	},
 
-	/** @returns {User} */
+	/**
+	 * Посылает приветственное сообщение с айди игрока
+	 * @returns {User}
+	 */
 	sendHello: function () {
 		return this.send( 'system/hello', { sessionId: this.sessionId });
-	},
-
-	/** @returns {User} */
-	bindEcho: function () {
-		return this.addEvent( 'message', function (command, params) {
-			this.send( 'system/echo', { command: command, params: params });
-		});
 	}
 });

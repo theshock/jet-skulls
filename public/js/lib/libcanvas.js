@@ -4582,20 +4582,21 @@ var Keyboard = Class(
 	keyEvent: function (event) {
 		return function (e) {
 			var key = this.self.key(e);
+			e.keyName = key;
+			this.fireEvent( event, [e] );
 			if (event != 'press') {
+				if (event == 'down') this.fireEvent(key, [e]);
+				if (event == 'up')   this.fireEvent(key + ':up', [e]);
 				if (event == 'down') {
 					this.self.keyStates[key] = true;
 				} else if ( key in this.self.keyStates ) {
 					delete this.self.keyStates[key];
 				}
-				if (event == 'down') this.fireEvent(key, [e]);
-				if (event == 'up')   this.fireEvent(key + ':up', [e]);
 			} else {
 				this.fireEvent(key + ':press', [e]);
 			}
 			var prevent = this.prevent(key);
 			if (prevent) e.preventDefault();
-			this.fireEvent( event, [e] );
 			this.debugUpdate();
 			return !prevent;
 		}.bind(this);

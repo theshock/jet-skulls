@@ -2,9 +2,20 @@
 Jet.Controller = Class(
 /** @lends Jet.Controller# */
 {
+
+	/** @property {Jet.Battle} */
+	battle: null,
+
 	/** @constructs */
 	initialize: function () {
 		this.user = this.establishConnection();
+		this.libcanvas = new LibCanvas( 'canvas', { clear: false })
+			.size( 512, 512, true )
+			.start();
+
+		this.libcanvas.createLayer('units');
+
+		this.battle = new Jet.Battle( this.user, this.libcanvas );
 
 		// todo: remove after debug;
 		window.jet = this;
