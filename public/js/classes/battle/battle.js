@@ -69,6 +69,7 @@ Jet.Battle = Class(
 		'message/battle/player/control': function (options) {
 			var player = this.getPlayer(options);
 			player.bindKeyboard();
+			player.bindMouse();
 			player.addEvent( 'change', this.onPlayerChange );
 			player.setOptions({ control: true });
 		}

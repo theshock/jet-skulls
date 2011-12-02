@@ -16,7 +16,7 @@ var Player = exports.Player = atom.Class(
 		moveX: 0,
 		moveY: 0,
 		angle: 0,
-		speed: 2 // 2 cells per second
+		speed: 4 // 2 cells per second
 	},
 
 	/**

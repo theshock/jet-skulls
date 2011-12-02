@@ -1043,7 +1043,7 @@ provides: Array
 ...
 */
 
-new function () {
+new function (undefined) {
 var slice = [].slice;
 
 atom.extend(Array, {

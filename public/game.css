@@ -3,8 +3,7 @@ html {
 	color: #eee;
 }
 
-canvas {
+.libcanvas-layers-container {
+	background: #000;
 	border: 1px dashed #040;
-	cursor: none;
-	background: black;
 }

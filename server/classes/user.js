@@ -39,6 +39,10 @@ var User = exports.User = atom.Class(
 			// и срабатывает событие о сообщении в целом
 			user.fireEvent( 'message'  , [ message.command, message.params ]);
 		});
+
+		connection.on( 'disconnect', function (message) {
+			user.fireEvent( 'disconnect' );
+		});
 	},
 
 	/**

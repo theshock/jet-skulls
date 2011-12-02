@@ -56,7 +56,7 @@ var Battle = exports.Battle = atom.Class(
 		player.owner = user;
 
 		// Оповещаем всех игроков о появлении новенького
-		this.announcement( 'battle/player/new', { players: [ player ] });
+		this.announcement( 'battle/player/new', { players: this.getPlayersList([ player ]) });
 
 		this.players.push( player );
 
@@ -70,6 +70,12 @@ var Battle = exports.Battle = atom.Class(
 		// если пользователю хочет изменить параметры игрока
 		user.addEvent( 'message/battle/player/statechange', function (params) {
 			player.setOptions( params );
+		});
+
+		// Если соединение разорвалось. Мы не посылаем "выход", потому что
+		// соединение ещё может восстановиться
+		user.addEvent( 'disconnect', function () {
+			player.setOptions({ disconnected: true });
 		});
 
 		return this;
