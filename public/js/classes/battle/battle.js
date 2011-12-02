@@ -22,6 +22,8 @@ Jet.Battle = Class(
 	 * @param {LibCanvas.Canvas2D} libcanvas
 	 */
 	initialize: function (user, libcanvas) {
+		Class.bindAll( this, 'onPlayerChange' );
+
 		var battle = this;
 
 		battle.user      = user;
@@ -35,25 +37,40 @@ Jet.Battle = Class(
 	/** @private */
 	rebindEvents: function () {
 		var events = {};
-		for (var i = this.events.length; i--;) {
-			events = this.events[i].bind(this);
+		for (var i in this.events) {
+			events[i] = this.events[i].bind(this);
 		}
 		this.events = events;
 		return this;
 	},
 
+	/**
+	 * @param {Object} options
+	 * @returns {Player}
+	 */
+	getPlayer: function (options) {
+		return this.players[options.playerId];
+	},
+
+	onPlayerChange: function (params) {
+		this.user.send( 'battle/player/statechange', params );
+	},
+
 	events: {
 		'message/battle/player/new': function (params) {
-			var scene = this.scene, players = this.players;
 			params.players.forEach(function (player) {
-				players[player.playerId] = new Jet.Unit( scene, player );
-			});
+				player = new Jet.Battle.Player( this.scene, player );
+				this.players[player.id] = player;
+			}.bind(this));
 		},
-		'message/battle/player/statechange': function (player) {
-			this.players[player.playerId].setOptions( player );
+		'message/battle/player/statechange': function (options) {
+			this.getPlayer(options).setOptions( options );
 		},
-		'message/battle/player/control': function (player) {
-			this.players[player.playerId].setOptions({ control: true });
+		'message/battle/player/control': function (options) {
+			var player = this.getPlayer(options);
+			player.bindKeyboard();
+			player.addEvent( 'change', this.onPlayerChange );
+			player.setOptions({ control: true });
 		}
 	}
 });

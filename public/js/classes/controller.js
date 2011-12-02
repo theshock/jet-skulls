@@ -10,7 +10,7 @@ Jet.Controller = Class(
 	initialize: function () {
 		this.user = this.establishConnection();
 		this.libcanvas = new LibCanvas( 'canvas', { clear: false })
-			.size( 512, 512, true )
+			.size( 256, 256, true )
 			.start();
 
 		this.libcanvas.createLayer('units');
